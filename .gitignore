@@ -106,4 +106,4 @@ ENV/
 .*.~
 .*.*~
 .*.swp
-
+data/fastText_word_vectors/wiki.en.vec

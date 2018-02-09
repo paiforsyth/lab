@@ -26,7 +26,7 @@ def progress_info(starttime, curiter, totaliter):
 
 
 
-def report(self, starttime, curiter, totaliter, loss):
+def report( starttime, curiter, totaliter, loss):
         progress, elapsed, est = progress_info(starttime, curiter, totaliter)
         s = "Elapsed time: %s. Iteration: %d. Progress: %d. Remaining: %s. loss: %.6f " % (
             elapsed, curiter, 100 * progress, est, loss)

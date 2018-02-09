@@ -15,7 +15,9 @@ import datatools.word_vectors
 import modules.maxpool_lstm
 
 #general rule: all used modules should be able to created just by passing args
-#todo: could create a trainingtools module.  add evaluate binary classifier that takes a context and a loader.
+#todo: 
+#-could create a trainingtools module.  add evaluate binary classifier that takes a context and a loader.
+#-implement tensorboard
 def default_parser(parser=None):
     if parser is None:
         parser= argparse.ArgumentParser()

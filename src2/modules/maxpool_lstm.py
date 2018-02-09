@@ -35,3 +35,11 @@ class MaxPoolLSTMFC(serialmodule.SerializableModule):
         out=self.lin(out)
         out=F.leaky_relu(out)
         return out
+    
+    @staticmethod
+    def from_embed(embedding, hidden_dim):
+        embedding_dim=embedding.weight.shape[1]
+        lstm=nn.LSTM(embedding_dim,hidden_dim,1, bidirectional=True, batch_first=True)
+        lin=nn.Linear(2*hidden_dim,2, bias=False)
+        return MaxPoolLSTMFC(embedding,lstm,lin) 
+
