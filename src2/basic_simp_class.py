@@ -16,7 +16,7 @@ import datatools.datasets
 import datatools.word_vectors
 import modules.maxpool_lstm
 import monitoring.reporting
-
+import train_tools.basic_classification
 
 def add_args(parser):
     if parser is None:
@@ -45,18 +45,7 @@ def make_context(args):
 
 
 
-def evaluate(context): 
-   correct=0
-   total=0
-   context.model.eval()
-   for seqs, categories, pad_mat in context.val_loader:
-        total+=seqs.shape[0]
-        scores=context.model(seqs,pad_mat)
-        scores=F.softmax(scores,dim=1).cpu()
-        _,predictions=torch.max(scores,dim=1)
-        correct+= torch.sum(predictions==categories).data[0]
-   context.model.train()
-   return correct / total 
+
 
 
 def run(args):
@@ -66,7 +55,7 @@ def run(args):
    starttime=time.time()
    report_interval=max(len(context.train_loader) //  args.reports_per_epoch ,1)
    for epoch_count in range(args.num_epochs):
-    eval_score=evaluate(context)
+    eval_score=train_tools.basic_classification.evaluate(context)
     print("starting epoch number "+ str(epoch_count+1) +  " of " +str(args.num_epochs)+".  Accuracy is "+ str(eval_score) +".")
     step=1
     for seqs, categories, pad_mat in context.train_loader:

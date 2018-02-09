@@ -41,7 +41,7 @@ def make_sequence_classification_collater(args):
         pad_mat=Variable(pad_mat)
         pad_mat=pad_mat.view(-1,max_len,1)
         if args.cuda:
-            pt_seqs=pt_seq.cuda()
+            pt_seqs=pt_seqs.cuda()
             pt_categories=pt_categories.cuda()
             pad_mat=pad_mat.cuda()
         return pt_seqs, pt_categories, pad_mat
