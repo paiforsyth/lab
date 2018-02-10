@@ -18,6 +18,8 @@ import modules.maxpool_lstm
 #todo: 
 #-could create a trainingtools module.  add evaluate binary classifier that takes a context and a loader.
 #-implement tensorboard
+#do some testing
+#add dropout to everything
 def default_parser(parser=None):
     if parser is None:
         parser= argparse.ArgumentParser()
