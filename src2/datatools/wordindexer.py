@@ -61,19 +61,20 @@ class WordIndexer:
     def seq2sentence(self, dexes):
         '''
          Converts a list of indicies into the corresponding string
-         Removes SOS and EOS tokens
+         Removes SOS and EOS tokens, but not other special tokens
          '''
-        assert UNKNOWN_TOKEN not in dexes
-        assert NULL_TOKEN not in dexes
+       # if dexes[0] not in self.sos_tokens:
+        #    import pdb; pdb.set_trace()
         assert dexes[0] in self.sos_tokens 
-        assert dexes[len(dexes) - 1] in self.eos_tokens
         str = ""
         for count, index in enumerate(dexes):
-            if count == 0 or count == len(dexes) - 1:
+            if count == 0: 
                 continue
+            if index in self.eos_tokens:
+                return str.strip()
             str += self.index2word[index]
             str += " "
-        return str.strip()
+        raise Exception("No EOS token found")
 
      
 

@@ -1,4 +1,5 @@
 import time
+from time import localtime, strftime
 import math
 import logging
 
@@ -32,4 +33,6 @@ def report( starttime, curiter, totaliter, loss):
             elapsed, curiter, 100 * progress, est, loss)
         logging.info(s)
 
-
+def timestamp():
+    ltime=localtime()
+    return strftime("%Y-%m-%dt-%H-%M-%S",ltime)

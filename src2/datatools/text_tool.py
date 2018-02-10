@@ -6,8 +6,8 @@ def unicode_to_ascii(s):
 
 def normalize_string(s):
     s = unicode_to_ascii(s.lower().strip())
-    s = re.sub(r"[^a-zA-Z.!?]", r" ", s)  #remove nonstandard chars
-    s = re.sub(r"([.!?])", r" \1 ", s)  #seperate punctuation
+    s = re.sub(r"[^a-zA-Z.!?,0123456789]", r" ", s)  #remove nonstandard chars
+    s = re.sub(r"([.!?,])", r" \1 ", s)  #seperate punctuation
     s = re.sub(r" +", r" ", s)  #remove redundant spaces
     s = s.strip()
     return s

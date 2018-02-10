@@ -12,6 +12,11 @@ MaxPoolLSTMConfigure=collections.namedtuple("MaxPoolLSTMConfigure","hidden_dim")
 
 
 class MaxPoolLSTM(serialmodule.SerializableModule):
+    '''
+        input:
+        x: dimensions batchsize bt max sequence length
+        pad mat: dimensions batchsize by max sequence length by 1
+    '''
     @staticmethod
     def from_configure(embedding, configure):
         embedding_dim=embedding.weight.shape[1]
@@ -60,5 +65,5 @@ class MaxPoolLSTMFC(serialmodule.SerializableModule):
 
     @staticmethod
     def from_args(embedding, args):
-        configure=MaxPoolLSTMFCConfigure(hidden_dim=args.lstm_hidden_dim, dropout_rate=args.dropout_rate, out_dim=2)
+        configure=MaxPoolLSTMFCConfigure(hidden_dim=args.lstm_hidden_dim, dropout_rate=args.maxlstm_dropout_rate, out_dim=2)
         return MaxPoolLSTMFC.from_configure(embedding, configure)
