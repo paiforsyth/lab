@@ -26,6 +26,7 @@ def add_args(parser):
     parser.add_argument("--processed_data_path",type=str,default="../saved_processed_data")
     parser.add_argument("--simplification_data_trim",type=int, default=30000)
     parser.add_argument("--lstm_hidden_dim",type = int, default =300)
+    parser.add_argument("--dropout_rate",type = int, default = 0.5)
     parser.add_argument("--use_saved_processed_data",type=bool,default=True)
     parser.add_argument("--reports_per_epoch",type=int,default=10)
     return parser
@@ -37,7 +38,7 @@ def make_context(args):
    train_loader= data.DataLoader(train_dataset,batch_size = 32,shuffle = True,collate_fn = datatools.datasets.make_sequence_classification_collater(args))
    val_loader= data.DataLoader(val_dataset,batch_size = 32,shuffle = True,collate_fn = datatools.datasets.make_sequence_classification_collater(args))
    embedding=datatools.word_vectors.embedding(index2vec, indexer.n_words,300)
-   model=modules.maxpool_lstm.MaxPoolLSTMFC.from_embed(embedding, args.lstm_hidden_dim) 
+   model=modules.maxpool_lstm.MaxPoolLSTMFC.from_args(embedding, args) 
    if args.cuda:
        model=model.cuda()
    optimizer=optim.SGD(model.parameters(),lr=0.01)
