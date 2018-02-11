@@ -113,7 +113,7 @@ def evaluation_report(context, loader, category_names={}, divider= "\t"):
 
 def write_evaulation_report(context,loader,filename,category_names):
     s,_=evaluation_report(context, loader, category_names)
-    f=open(filename,"w")
+    f=open(filename,"w",errors='surrogateescape')
     f.write(s)
     f.close()
                 
