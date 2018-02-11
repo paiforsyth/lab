@@ -12,6 +12,7 @@ class TBWriter(object):
         self.writer = SummaryWriter(os.path.join("../tb_logs/",self.run_name))
         self.train_idx = 0
         self.acc_idx = 0
+        self.dps_index=0
 
     def write_hyperparams(self):
         self.writer.add_text("{}/hyperparams".format(self.run_name), " ".join(sys.argv))
@@ -23,6 +24,10 @@ class TBWriter(object):
     def write_accuracy(self, acc):
         self.writer.add_scalar("{}/accuracy".format(self.run_name), acc , self.acc_idx)
         self.acc_idx += 1
+
+    def write_data_per_second(self,dps):
+        self.writer.add_scalar("{}/datapoints_per_second".format(self.run_name), dps , self.dps_index)
+        self.dps_index += 1
 
     # def next(self):
         # self.i += 1

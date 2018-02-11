@@ -29,6 +29,7 @@ def default_parser(parser=None):
     parser.add_argument("--use_saved_processed_data",type=bool,default=True)
     parser.add_argument("--processed_data_path",type=str,default="../saved_processed_data")
     parser.add_argument("--report_path",type=str,default="../reports")
+    parser.add_argument("--batch_size", type= int, default=32)
 
     return parser
 

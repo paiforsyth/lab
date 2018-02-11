@@ -55,9 +55,11 @@ def make_context(args):
         category_names={0:"negative",1:"positive"}
    else:
         raise Exception("Unknown dataset")
+   
 
-   train_loader= data.DataLoader(train_dataset,batch_size = 32,shuffle = True,collate_fn = datatools.sequence_classification.make_collater(args))
-   val_loader= data.DataLoader(val_dataset,batch_size = 32,shuffle = True,collate_fn = datatools.sequence_classification.make_collater(args))
+   train_loader= data.DataLoader(train_dataset,batch_size = args.batch_size,shuffle = True,collate_fn = datatools.sequence_classification.make_collater(args))
+   logging.info("Length of train set :"+ str(len(train_dataset))+". Length of data loader: "+str(len(train_loader))+"." )
+   val_loader= data.DataLoader(val_dataset,batch_size = args.batch_size, shuffle = False, collate_fn = datatools.sequence_classification.make_collater(args))
    embedding=datatools.word_vectors.embedding(index2vec, indexer.n_words,300)
    if args.model_type == "maxpool_lstm_fc":
     model=modules.maxpool_lstm.MaxPoolLSTMFC.from_args(embedding, args) 
@@ -89,7 +91,8 @@ def run(args):
    for epoch_count in range(args.num_epochs):
         logging.info("Starting epoch "+str(epoch_count) +".")
   
-        step=1
+        step=0
+        epoch_start_time=time.time()
         for seqs, categories, pad_mat, _ in context.train_loader:
             step+=1
             context.optimizer.zero_grad()
@@ -100,9 +103,10 @@ def run(args):
             accumulated_loss+=loss.data[0]
             context.tb_writer.write_train_loss(loss.data[0])
             if step % report_interval == 0:
-                monitoring.reporting.report(starttime,step,len(context.train_loader),accumulated_loss / report_interval)
+                monitoring.reporting.report(starttime,step,len(context.train_loader), accumulated_loss / report_interval)
                 accumulated_loss = 0
-             
+        epoch_duration = time.time() - epoch_start_time
+        context.tb_writer.write_data_per_second(len(context.train_loader)/epoch_duration)
         old_eval_score=eval_score
         eval_score=datatools.sequence_classification.evaluate(context, context.val_loader)
         context.tb_writer.write_accuracy(eval_score)
