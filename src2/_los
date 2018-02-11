@@ -98,7 +98,7 @@ def run(args):
             loss.backward()
             context.optimizer.step()
             accumulated_loss+=loss.data[0]
-            context.tb_writer.write_train_loss(loss.data[0])
+            context.tb_writer.write_loss(loss.data[0])
             if step % report_interval == 0:
                 monitoring.reporting.report(starttime,step,len(context.train_loader),accumulated_loss / report_interval)
                 accumulated_loss = 0

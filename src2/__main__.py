@@ -1,7 +1,6 @@
 import argparse
 import logging
 import time
-from tqdm import tqdm
 import torch.utils.data as data
 import torch.nn as nn
 import torch.optim as optim
@@ -46,7 +45,7 @@ def main():
 
 
    parser=basic_classify.add_args(parser)
-   args=parser.parse_known_args()[0]
+   args=parser.parse_args()
    basic_classify.run(args)
 
 

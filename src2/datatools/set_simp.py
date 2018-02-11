@@ -32,7 +32,7 @@ def load(args):
     
         index_words("normal.aligned")
         index_words("simple.aligned")
-        indexer= indexer.trimmed(args.trim)
+        indexer= indexer.trimmed(args.data_trim)
         vects, missing_words = word_vectors.fasttext_from_file(args, indexer) 
         sequences=[]
         categories=[]
