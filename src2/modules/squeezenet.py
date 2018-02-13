@@ -22,7 +22,7 @@ def add_args(parser):
     parser.add_argument("--squeezenet_pool_interval",type=int, default=4)
     parser.add_argument("--squeezenet_num_fires", type=int, default=8)
     parser.add_argument("--squeezenet_conv1_stride", type=int, default=2)
-    parser.add_argument("--squeezenet_conv1_size",type=int, default=1)
+    parser.add_argument("--squeezenet_conv1_size",type=int, default=7)
     parser.add_argument("--squeezenet_num_conv1_filters", type=int, default=96) #should be great than 0, otherwise you get a pool in the first layer
     parser.add_argument("--squeezenet_pooling_count_offset", type=int, default=2) #should be great than 0, otherwise you get a pool in the first layer
 

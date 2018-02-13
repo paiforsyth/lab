@@ -47,7 +47,7 @@ def add_args(parser):
     
     return parser
 
-Context=collections.namedtuple("Context","model, train_loader, val_loader, optimizer, indexer, category_names, tb_writer, train_size, data_type, scheduler")
+Context=collections.namedtuple("Context","model, train_loader, val_loader, optimizer, indexer, category_names, tb_writer, train_size, data_type, scheduler, test_loader")
 
 
 
@@ -75,19 +75,29 @@ def make_context(args):
         category_names={0:"1",1:"2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9"}
         data_type = DataType.IMAGE 
    elif args.dataset_for_classification == "cifar_challenge":
-        f=open("../data/cifar/train_data","rb")
-        squashed_images=pickle.load(f)
-        labels=pickle.load(f)
-        f.close()
-        train_dataset,val_dataset = datatools.set_cifar_challenge.make_train_val_datasets(squashed_images, labels, args.validation_set_size, transform=None) 
-        train_dataset.transform = transforms.Compose([transforms.RandomCrop(size=32 ,padding= 4), transforms.RandomHorizontalFlip(), transforms.ToTensor() ])
-        val_dataset.transform = transforms.ToTensor()
+        if args.mode == "train":
+            f=open("../data/cifar/train_data","rb")
+            squashed_images=pickle.load(f)
+            labels=pickle.load(f)
+            f.close()
+            train_dataset,val_dataset = datatools.set_cifar_challenge.make_train_val_datasets(squashed_images, labels, args.validation_set_size, transform=None) 
+            train_dataset.transform = transforms.Compose([transforms.RandomCrop(size=32 ,padding= 4), transforms.RandomHorizontalFlip(), transforms.ToTensor() ])
+            val_dataset.transform = transforms.ToTensor()
+        elif args.mode == "test":
+            f=open("../data/cifar/test_data","rb")
+            squashed_images=pickle.load(f)
+            test_dataset= datatools.set_cifar_challenge.Dataset(data=squashed_images, labels=[-1]*squashed_images.shape[0], transform=transforms.ToTensor())
+            data_type = DataType.IMAGE
+            f.close()
         data_type = DataType.IMAGE
         category_names= { k:v for k,v in enumerate(datatools.set_cifar_challenge.CIFAR100_LABELS_LIST)}
+
    else:
         raise Exception("Unknown dataset.")
    
-   train_size=len(train_dataset)
+
+
+
 
    if data_type == DataType.SEQUENCE:
         embedding=datatools.word_vectors.embedding(index2vec, indexer.n_words,300)
@@ -95,10 +105,15 @@ def make_context(args):
         val_loader= data.DataLoader(val_dataset,batch_size = args.batch_size, shuffle = False, collate_fn = datatools.sequence_classification.make_collater(args))
    elif data_type == DataType.IMAGE:
        indexer= None
-       train_loader=data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle= True, collate_fn=datatools.basic_classification.make_var_wrap_collater(args))
-       val_loader=data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle= False, collate_fn=datatools.basic_classification.make_var_wrap_collater(args))
+       if args.mode == "train":
+            train_loader=data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle= True, collate_fn=datatools.basic_classification.make_var_wrap_collater(args))
+            val_loader=data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle= False, collate_fn=datatools.basic_classification.make_var_wrap_collater(args))
+       elif  args.mode == "test":
+            test_loader=data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle= False, collate_fn=datatools.basic_classification.make_var_wrap_collater(args))
+            assert(args.resume)
    else:
        raise Exception("Unknown data type.")
+        
    
    if args.model_type == "maxpool_lstm_fc":
     model=modules.maxpool_lstm.MaxPoolLSTMFC.from_args(embedding, args) 
@@ -121,15 +136,28 @@ def make_context(args):
        optimizer = optim.Adam(model.parameters(), lr=args.init_lr)
    else:
        raise Exception("Unknown optimizer.") 
+
    if args.lr_scheduler == "exponential":
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer,args.lr_gamma)
    elif args.lr_scheduler == "plateau":
        scheduler= torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", verbose=True, patience=args.plateau_lr_scheduler_patience)
+   elif args.lr_scheduler == "linear":
+        lam = lambda epoch: 1-args.linear_scheduler_subtract_factor* min(epoch,args.linear_scheduler_max_epoch)/args.linear_scheduler_max_epoch 
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lam )
    elif args.lr_scheduler == None:
        scheduler = None
    else: 
        raise Exception("Unknown Scheduler")
-   return Context(model, train_loader, val_loader, optimizer, indexer, category_names=category_names, tb_writer=monitoring.tb_log.TBWriter(args.save_prefix+"_run_{}"), train_size=train_size, data_type=data_type, scheduler=scheduler)
+
+
+   if args.mode =="train":
+       train_size=len(train_dataset)
+       test_loader = None
+   elif args.mode=="test":
+       train_size= None
+       train_loader = None
+       val_loader = None
+   return Context(model, train_loader, val_loader, optimizer, indexer, category_names=category_names, tb_writer=monitoring.tb_log.TBWriter(args.save_prefix+"_run_{}"), train_size=train_size, data_type=data_type, scheduler=scheduler, test_loader=test_loader)
 
 
 
@@ -139,11 +167,22 @@ def make_context(args):
 def run(args):
 
    context=make_context(args) 
+
+   if args.resume:
+       logging.info("loading saved model from file: "+args.res_file)
+       context.model.load(os.path.join(args.model_save_path, args.res_file))
+   
+   if args.mode == "test":
+       datatools.basic_classification.make_prediction_report(context, context.test_loader,args.test_report_filename ) 
+       return
+
+
+
+
    context.tb_writer.write_hyperparams()
    timestamp=monitoring.reporting.timestamp()
    
    report_interval=max(len(context.train_loader) //  args.reports_per_epoch ,1)
-   eval_score=float("inf")
    accumulated_loss=0 
    param_count=genutil.modules.count_trainable_params(context.model)
    logging.info("Number of parameters: "+ str(param_count))
@@ -151,10 +190,8 @@ def run(args):
 
 
 
-   if args.resume:
-       logging.info("resuming saved model")
-       context.model.load(os.path.join(args.model_save_path,args.res_file))
    
+   best_eval_score=-float("inf")
    for epoch_count in range(args.num_epochs):
         logging.info("Starting epoch "+str(epoch_count) +".")
         if args.param_difs:
@@ -186,12 +223,11 @@ def run(args):
             new_param_tensors=genutil.modules.get_named_trainable_param_tensors(context.model)
             context.tb_writer.write_param_change(new_param_tensors, param_tensors)
             param_tensors=new_param_tensors
-        old_eval_score=eval_score
         eval_score=datatools.basic_classification.evaluate(context, context.val_loader)
         context.tb_writer.write_accuracy(eval_score)
         logging.info("Finished epoch number "+ str(epoch_count+1) +  " of " +str(args.num_epochs)+".  Accuracy is "+ str(eval_score) +".")
         if context.scheduler is not None:
-            if args.lr_scheduler == "exponential":
+            if args.lr_scheduler == "exponential" or args.lr_scheduler == "linear":
                 context.tb_writer.write_lr(context.scheduler.get_lr()[0] )
                 context.scheduler.step()
             elif args.lr_scheduler == "plateau":
@@ -200,7 +236,8 @@ def run(args):
             else:
                 raise Exception("Unknown Scheduler")
 
-        if eval_score > old_eval_score:
+        if eval_score > best_eval_score:
+            best_eval_score=eval_score
             logging.info("Saving model")
             context.model.save(os.path.join(args.model_save_path,args.save_prefix +"_best_model_" + timestamp)  )
             context.model.save(os.path.join(args.model_save_path,"recent_model" )  )
