@@ -80,7 +80,7 @@ def make_context(args):
         labels=pickle.load(f)
         f.close()
         train_dataset,val_dataset = datatools.set_cifar_challenge.make_train_val_datasets(squashed_images, labels, args.validation_set_size, transform=None) 
-        train_dataset.transform = transforms.Compose([transforms.RandomCrop(28,28), transforms.RandomHorizontalFlip(), transforms.ToTensor() ])
+        train_dataset.transform = transforms.Compose([transforms.RandomCrop(size=32 ,padding= 4), transforms.RandomHorizontalFlip(), transforms.ToTensor() ])
         val_dataset.transform = transforms.ToTensor()
         data_type = DataType.IMAGE
         category_names= { k:v for k,v in enumerate(datatools.set_cifar_challenge.CIFAR100_LABELS_LIST)}
