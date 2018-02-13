@@ -9,7 +9,7 @@ import numpy as np
 
 class Dataset(data.Dataset):
     '''
-    raw_sequences is an optional lidy that stores an unprocessed sequences. used mainly in evaluation
+    raw_sequences is an optional item that stores an unprocessed sequences. used mainly in evaluation
     '''
     def __init__(self, sequences, categories, raw_sequences=None):
         assert len(sequences) == len(categories)
@@ -62,18 +62,6 @@ def make_collater(args):
     return collater
 
 
-def evaluate(context, loader): 
-   correct=0
-   total=0
-   context.model.eval()
-   for seqs, categories, pad_mat, _ in loader:
-        total+=seqs.shape[0]
-        scores=context.model(seqs,pad_mat)
-        scores=F.softmax(scores,dim=1)
-        _,predictions=torch.max(scores,dim=1)
-        correct+= torch.sum(predictions==categories).cpu().data[0]
-   context.model.train()
-   return correct / total 
    
 def evaluation_report(context, loader, category_names={}, divider= "\t"):
     context.model.eval()

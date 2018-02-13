@@ -1,0 +1,2 @@
+#!/usr/bin/env bash 
+python . --save_prefix="squeeze-res-cifar" --dataset_for_classification=cifar_challenge  --model_type=squeezenet --squeezenet_out_dim=100 --squeezenet_in_channels=3 --squeezenet_prop3=0.1 --squeezenet_resfire --squeezenet_dropout_rate=0 --fire_skip_mode=simple  --batch_size=64  --num_epochs=100   --optimizer=rmsprop --init_lr=0.0001  --lr_scheduler=plateau --plateau_lr_scheduler_patience=5  --grad_norm_clip=50  --cuda
