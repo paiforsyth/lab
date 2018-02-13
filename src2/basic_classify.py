@@ -200,7 +200,7 @@ def run(args):
             else:
                 raise Exception("Unknown Scheduler")
 
-        if eval_score< old_eval_score:
+        if eval_score > old_eval_score:
             logging.info("Saving model")
             context.model.save(os.path.join(args.model_save_path,args.save_prefix +"_best_model_" + timestamp)  )
             context.model.save(os.path.join(args.model_save_path,"recent_model" )  )
