@@ -195,7 +195,7 @@ def run(args):
                 context.tb_writer.write_lr(context.scheduler.get_lr()[0] )
                 context.scheduler.step()
             elif args.lr_scheduler == "plateau":
-                context.tb_writer.write_lr(next(context.optimizer.param_groups)['lr'] )
+               # context.tb_writer.write_lr(next(context.optimizer.param_groups)['lr'] )
                 context.scheduler.step(eval_score)
             else:
                 raise Exception("Unknown Scheduler")

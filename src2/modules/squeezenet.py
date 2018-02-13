@@ -20,6 +20,7 @@ def add_args(parser):
     parser.add_argument("--fire_skip_mode", type=str, choices=["simple", "none"], default= "none")
     parser.add_argument("--squeezenet_pool_interval",type=int, default=4)
     parser.add_argument("--squeezenet_num_fires", type=int, default=8)
+    parser.add_argument("--squeezenet_conv1_stride", type=int, default=2)
 
     
 
@@ -89,7 +90,7 @@ class FireSkipMode(Enum):
     SIMPLE=1
 
 
-SqueezeNetConfig=collections.namedtuple("SqueezeNetConfig","in_channels, base, incr, prop3, freq, sr, out_dim, skipmode, resfire, dropout_rate, num_fires, pool_interval")
+SqueezeNetConfig=collections.namedtuple("SqueezeNetConfig","in_channels, base, incr, prop3, freq, sr, out_dim, skipmode, resfire, dropout_rate, num_fires, pool_interval, conv1_stride")
 class SqueezeNet(serialmodule.SerializableModule):
     '''
         Based on Squeezenet by Iandola et al.
@@ -105,7 +106,7 @@ class SqueezeNet(serialmodule.SerializableModule):
             skipmode = FireSkipMode.SIMPLE
         elif args.fire_skip_mode == "none":
             skipmode = FireSkipMode.NONE
-        config=SqueezeNetConfig(in_channels=args.squeezenet_in_channels, base=args.squeezenet_base, incr= args.squeezenet_incr, prop3=args.squeezenet_prop3, freq=args.squeezenet_freq, sr= args.squeezenet_sr, out_dim=args.squeezenet_out_dim, skipmode=skipmode, resfire=args.squeezenet_resfire, dropout_rate=args.squeezenet_dropout_rate, num_fires=args.squeezenet_num_fires, pool_interval=args.squeezenet_pool_interval  )
+        config=SqueezeNetConfig(in_channels=args.squeezenet_in_channels, base=args.squeezenet_base, incr= args.squeezenet_incr, prop3=args.squeezenet_prop3, freq=args.squeezenet_freq, sr= args.squeezenet_sr, out_dim=args.squeezenet_out_dim, skipmode=skipmode, resfire=args.squeezenet_resfire, dropout_rate=args.squeezenet_dropout_rate, num_fires=args.squeezenet_num_fires, pool_interval=args.squeezenet_pool_interval, conv1_stride=args.squeezenet_conv1_stride  )
         return SqueezeNet(config)
 
     def __init__(self, config):
@@ -119,11 +120,11 @@ class SqueezeNet(serialmodule.SerializableModule):
 
         if config.resfire:
             layer_dict=collections.OrderedDict([
-            ("conv1", nn.Conv2d(config.in_channels, first_layer_num_convs, first_layer_conv_width, padding=first_layer_padding, stride=2)),
+            ("conv1", nn.Conv2d(config.in_channels, first_layer_num_convs, first_layer_conv_width, padding=first_layer_padding, stride=config.conv1_stride)),
             ]) 
         else:
             layer_dict=collections.OrderedDict([
-            ("conv1", nn.Conv2d(config.in_channels, first_layer_num_convs, first_layer_conv_width, padding=first_layer_padding, stride=2)),
+            ("conv1", nn.Conv2d(config.in_channels, first_layer_num_convs, first_layer_conv_width, padding=first_layer_padding, stride=config.conv1_stride)),
             ("conv1relu", nn.LeakyReLU()),
             ("maxpool1", nn.MaxPool2d(kernel_size=3,stride=2,padding=1))
             ]) 

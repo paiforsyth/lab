@@ -30,6 +30,7 @@ def default_parser(parser=None):
     parser.add_argument("--report_path",type=str,default="../reports")
     parser.add_argument("--batch_size", type= int, default=32)
     parser.add_argument("--param_report", action="store_true")
+    parser.add_argument("--mod_report",action="store_true")
     parser.add_argument("--param_difs", action="store_true" )
     parser.add_argument("--optimizer", type=str, choices=["sgd", "rmsprop", "adam"], default="sgd")
     parser.add_argument("--init_lr",type=float, default=0.1)
@@ -62,6 +63,9 @@ def main():
    if args.param_report:
        show_params()
        return
+   if args.mod_report:
+       show_submods()
+       return
    if args.output_level == "debug":
         logging.getLogger().setLevel(logging.DEBUG)
    basic_classify.run(args)
@@ -80,7 +84,16 @@ def show_params():
        print(param.requires_grad)
    param_count = genutil.modules.count_trainable_params(context.model)
    print("total trainable params:{}".format(param_count))
+    
 
+def show_submods():
+   logging.basicConfig(level=logging.DEBUG)
+   parser=default_parser()
+   parser=basic_classify.add_args(parser)
+   args=parser.parse_known_args()[0]
+   context=basic_classify.make_context(args)
+   print("layers:")
+   print(list(context.model.children()))
 
 
 if __name__ == "__main__":
