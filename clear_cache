@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+rm -r tb_logs/*
+rm -r saved_models/*

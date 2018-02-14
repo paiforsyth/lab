@@ -94,7 +94,7 @@ class WideResFire(serialmodule.SerializableModule):
     '''
     @staticmethod 
     def from_configure(configure):
-        return ResFire(in_channels= configure.in_channels, num_squeeze= configure.num_squeeze,num_expand1= configure.num_expand1,num_expand3= configure.num_expand3, skip=configure.skip)
+        return WideResFire(in_channels= configure.in_channels, num_squeeze= configure.num_squeeze,num_expand1= configure.num_expand1,num_expand3= configure.num_expand3, skip=configure.skip)
 
 
     def __init__(self, in_channels, num_squeeze, num_expand1, num_expand3, skip):
