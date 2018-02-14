@@ -25,9 +25,9 @@ def add_args(parser):
     parser.add_argument("--squeezenet_conv1_stride", type=int, default=2)
     parser.add_argument("--squeezenet_conv1_size",type=int, default=7)
     parser.add_argument("--squeezenet_num_conv1_filters", type=int, default=96) 
-    parser.add_argument("--squeezenet_pooling_count_offset", type=int, default=2) #should be great than 0, otherwise you get a pool in the first layer
+    parser.add_argument("--squeezenet_pooling_count_offset", type=int, default=2) #should be greater than 0, otherwise you get a pool in the first layer
     parser.add_argument("--squeezenet_dense_k",type=int, default=12)
-    parser.add_argument("--squeezenet_dense_fire_depths",type=str, default="default")
+    parser.add_argument("--squeezenet_dense_fire_depths",type=str, default="default, shallow")
     parser.add_argument("--squeezenet_dense_fire_compress_level", type=float, default=0.5 )
 
 
@@ -176,6 +176,8 @@ class SqueezeNet(serialmodule.SerializableModule):
             skipmode = FireSkipMode.NONE
         if args.squeezenet_dense_fire_depths=="default":
             depthlist=[6, 12, 24, 16]
+        elif args.squeezenet_dense_fire_depths=="shallow":
+            depthlist=[1, 2, 4, 8]
         else:
             depthlist=None
 
