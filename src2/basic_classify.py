@@ -160,7 +160,7 @@ def make_context(args):
        train_size= None
        train_loader = None
        val_loader = None
-   return Context(model, train_loader, val_loader, optimizer, indexer, category_names=category_names, tb_writer=monitoring.tb_log.TBWriter(args.save_prefix+"_run_{}"), train_size=train_size, data_type=data_type, scheduler=scheduler, test_loader=test_loader)
+   return Context(model, train_loader, val_loader, optimizer, indexer, category_names=category_names, tb_writer=monitoring.tb_log.TBWriter("{}_"+args.save_prefix), train_size=train_size, data_type=data_type, scheduler=scheduler, test_loader=test_loader)
 
 
 
@@ -242,10 +242,10 @@ def run(args):
         if eval_score > best_eval_score:
             best_eval_score=eval_score
             logging.info("Saving model")
-            context.model.save(os.path.join(args.model_save_path,args.save_prefix +"_best_model_" + timestamp)  )
-            context.model.save(os.path.join(args.model_save_path,"recent_model" )  )
+            context.model.save(os.path.join(args.model_save_path,timestamp+args.save_prefix +"_best_model" )  )
+            context.model.save(os.path.join(args.model_save_path,timestamp+"recent_model" )  )
 
    logging.info("Loading best model")
-   context.model.load(os.path.join(args.model_save_path,args.save_prefix +"_best_model_" + timestamp))
+   context.model.load(os.path.join(timestamp + args.model_save_path,args.save_prefix +"_best_model"))
    if context.data_type == DataType.SEQUENCE:
-        datatools.sequence_classification.write_evaulation_report(context, context.val_loader,os.path.join(args.report_path,args.save_prefix + timestamp +".txt") , category_names=context.category_names) 
+        datatools.sequence_classification.write_evaulation_report(context, context.val_loader,os.path.join(args.timestamp + report_path,args.save_prefix +".txt") , category_names=context.category_names) 

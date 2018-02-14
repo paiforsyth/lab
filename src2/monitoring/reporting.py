@@ -1,4 +1,5 @@
 import time
+import datetime
 from time import localtime, strftime
 import math
 import logging
@@ -34,5 +35,8 @@ def report( starttime, curiter, totaliter, loss):
         logging.info(s)
 
 def timestamp():
-    ltime=localtime()
-    return strftime("%Y-%m-%dt-%H-%M-%S",ltime)
+    return datetime.datetime.now().strftime("%d_%B_%Y_%A_%H_%M_%S")
+
+def daystamp():
+    return datetime.datetime.now().strftime("%d_%B_%Y_%A")
+

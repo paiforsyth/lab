@@ -15,16 +15,21 @@ def add_args(parser):
     parser.add_argument("--squeezenet_freq",type=int, default=2)
     parser.add_argument("--squeezenet_sr",type=float, default=0.125)
     parser.add_argument("--squeezenet_out_dim",type=int)
-    parser.add_argument("--squeezenet_resfire",action="store_true")
-    parser.add_argument("--squeezenet_wide_resfire",action="store_true")
+
+    parser.add_argument("--squeezenet_mode",type=str, choices=["resfire","wide_resfire","dense_fire","normal"], default="normal")
+
     parser.add_argument("--squeezenet_dropout_rate",type=float)
     parser.add_argument("--fire_skip_mode", type=str, choices=["simple", "none"], default= "none")
     parser.add_argument("--squeezenet_pool_interval",type=int, default=4)
     parser.add_argument("--squeezenet_num_fires", type=int, default=8)
     parser.add_argument("--squeezenet_conv1_stride", type=int, default=2)
     parser.add_argument("--squeezenet_conv1_size",type=int, default=7)
-    parser.add_argument("--squeezenet_num_conv1_filters", type=int, default=96) #should be great than 0, otherwise you get a pool in the first layer
+    parser.add_argument("--squeezenet_num_conv1_filters", type=int, default=96) 
     parser.add_argument("--squeezenet_pooling_count_offset", type=int, default=2) #should be great than 0, otherwise you get a pool in the first layer
+    parser.add_argument("--squeezenet_dense_k",type=int, default=12)
+    parser.add_argument("--squeezenet_dense_fire_depths",type=str, default="default")
+    parser.add_argument("--squeezenet_dense_fire_compress_level", type=float, default=0.5 )
+
 
     
 
@@ -123,18 +128,39 @@ class WideResFire(serialmodule.SerializableModule):
         return out
 
 
-
 class FireSkipMode(Enum):
     NONE=0
     SIMPLE=1
 
 
-SqueezeNetConfig=collections.namedtuple("SqueezeNetConfig","in_channels, base, incr, prop3, freq, sr, out_dim, skipmode, resfire, dropout_rate, num_fires, pool_interval, conv1_stride, conv1_size, pooling_count_offset, wide_resfire, num_conv1_filters")
+class DenseFire(serialmodule.SerializableModule):
+    def __init__(self, k0, num_subunits, k, prop3):
+        super().__init__()
+        self.subunit_dict=collections.OrderedDict()
+        expand3=max(1,math.floor(prop3*k))
+        expand1=k-expand3
+        for i in range(num_subunits):
+            self.subunit_dict["subfire"+str(i)]=ResFire.from_configure(FireConfig(in_channels=k0+k*i, num_squeeze=4*k, num_expand1=expand1, num_expand3=expand3, skip=False   ) )
+        for name, unit in self.subunit_dict.items():
+            self.add_module(name,unit)
+
+    def forward(self, x):
+        xlist=[]
+        for i, (name, unit) in  enumerate(self.subunit_dict.items()):
+            xlist.append(x)
+            x=unit(torch.cat(xlist,dim=1)) #cat along filter dimension
+        return x
+
+
+
+
+SqueezeNetConfig=collections.namedtuple("SqueezeNetConfig","in_channels, base, incr, prop3, freq, sr, out_dim, skipmode,  dropout_rate, num_fires, pool_interval, conv1_stride, conv1_size, pooling_count_offset, num_conv1_filters,  dense_fire_k,  dense_fire_depth_list, dense_fire_compression_level, mode")
 class SqueezeNet(serialmodule.SerializableModule):
     '''
         Used ideas from
         -Squeezenet by Iandola et al.
         -Resnet by He et al.
+        -densenet by Huang et al.
 
     '''
     @staticmethod
@@ -148,12 +174,34 @@ class SqueezeNet(serialmodule.SerializableModule):
             skipmode = FireSkipMode.SIMPLE
         elif args.fire_skip_mode == "none":
             skipmode = FireSkipMode.NONE
-        config=SqueezeNetConfig(in_channels=args.squeezenet_in_channels, base=args.squeezenet_base, incr= args.squeezenet_incr, prop3=args.squeezenet_prop3, freq=args.squeezenet_freq, sr= args.squeezenet_sr, out_dim=args.squeezenet_out_dim, skipmode=skipmode, resfire=args.squeezenet_resfire, dropout_rate=args.squeezenet_dropout_rate, num_fires=args.squeezenet_num_fires, pool_interval=args.squeezenet_pool_interval, conv1_stride=args.squeezenet_conv1_stride, conv1_size=args.squeezenet_conv1_size, pooling_count_offset=args.squeezenet_pooling_count_offset, wide_resfire=args.squeezenet_wide_resfire, num_conv1_filters=args.squeezenet_num_conv1_filters  )
+        if args.squeezenet_dense_fire_depths=="default":
+            depthlist=[6, 12, 24, 16]
+        else:
+            depthlist=None
+
+        config=SqueezeNetConfig(in_channels=args.squeezenet_in_channels,
+                base=args.squeezenet_base, incr= args.squeezenet_incr,
+                prop3=args.squeezenet_prop3, freq=args.squeezenet_freq,
+                sr= args.squeezenet_sr, out_dim=args.squeezenet_out_dim, skipmode=skipmode,
+                dropout_rate=args.squeezenet_dropout_rate,
+                num_fires=args.squeezenet_num_fires,
+                pool_interval=args.squeezenet_pool_interval,
+                conv1_stride=args.squeezenet_conv1_stride,
+                conv1_size=args.squeezenet_conv1_size,
+                pooling_count_offset=args.squeezenet_pooling_count_offset,
+                num_conv1_filters=args.squeezenet_num_conv1_filters,
+                mode= args.squeezenet_mode,
+                dense_fire_k=args.squeezenet_dense_k,
+                dense_fire_depth_list= depthlist,
+                dense_fire_compression_level=args.squeezenet_dense_fire_compress_level)
         return SqueezeNet(config)
 
     def __init__(self, config):
         super().__init__()
         assert(config.skipmode == FireSkipMode.NONE or config.skipmode == FireSkipMode.SIMPLE)
+        if config.mode == "densefire":
+            logging.info("Making a dense squeezenet.")
+            assert config.num_fires == len(config.dense_fire_depth_list)
         num_fires=config.num_fires #8
         first_layer_num_convs=config.num_conv1_filters
         first_layer_conv_width=config.conv1_size
@@ -161,7 +209,7 @@ class SqueezeNet(serialmodule.SerializableModule):
 
         pool_offset=config.pooling_count_offset
 
-        if config.resfire or config.wide_resfire:
+        if config.mode != "normal":
             layer_dict=collections.OrderedDict([
             ("conv1", nn.Conv2d(config.in_channels, first_layer_num_convs, first_layer_conv_width, padding=first_layer_padding, stride=config.conv1_stride)),
             ]) 
@@ -174,32 +222,37 @@ class SqueezeNet(serialmodule.SerializableModule):
 
         self.channel_counts=[ first_layer_num_convs]#initial number of channels entering ith fire layer (labeled i+2 to match paper)
         for i in range(num_fires):
-            e=config.base+config.incr*math.floor(i/config.freq)
-            num_squeeze=max(math.floor(config.sr*e),1)
-            num_expand3=max(math.floor(config.prop3*e),1)
-            num_expand1=e-num_expand3
-            if config.skipmode == FireSkipMode.SIMPLE and e == self.channel_counts[i]:
+            if  config.mode != "dense_fire":
+                e=config.base+config.incr*math.floor(i/config.freq)
+                num_squeeze=max(math.floor(config.sr*e),1)
+                num_expand3=max(math.floor(config.prop3*e),1)
+                num_expand1=e-num_expand3
+                if config.skipmode == FireSkipMode.SIMPLE and e == self.channel_counts[i] :
                     skip_here=True
                     logging.info("Making simple skip layer.")
-            else:
+                else:
                     skip_here=False
-            if config.wide_resfire:
-                layer_dict["wide_resfire{}".format(i+2)]=WideResFire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
-            elif config.resfire:
-                layer_dict["resfire{}".format(i+2)]=ResFire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
-                
-            else:
-             
-                layer_dict["fire{}".format(i+2)]=Fire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
+                if config.mode == "wide_resfire":
+                    layer_dict["wide_resfire{}".format(i+2)]=WideResFire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
+                elif config.mode == "resfire":
+                    layer_dict["resfire{}".format(i+2)]=ResFire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
+                else:
+                    layer_dict["fire{}".format(i+2)]=Fire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
 
+                self.channel_counts.append(e)
 
-            self.channel_counts.append(e)
+            elif config.mode == "dense_fire": 
+                    layer_dict["dense_fire{}".format(i+2)]=DenseFire(k0=self.channel_counts[i], num_subunits=config.dense_fire_depth_list[i], k=config.dense_fire_k, prop3=config.prop3 )
+                    ts=max(math.floor(config.dense_fire_compression_level*config.dense_fire_k),1)
+                    layer_dict["transition{}".format(i+2)]=nn.Conv2d(config.dense_fire_k, ts, 1)
+                    self.channel_counts.append(ts)
+
 
             if (i+pool_offset) % config.pool_interval == 0:
                 layer_dict["maxpool{}".format(i+2)]= nn.MaxPool2d(kernel_size=3,stride=2,padding=1)
 
         layer_dict["dropout"]=nn.Dropout(p=config.dropout_rate)
-        if config.resfire:
+        if config.mode != "normal":
             layer_dict["final_convrelu"]=nn.LeakyReLU()
             layer_dict["final_conv"]=nn.Conv2d(self.channel_counts[-1], config.out_dim, kernel_size=1) 
         else: 

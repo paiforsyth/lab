@@ -5,13 +5,13 @@ import os.path
 import logging
 
 from tensorboardX import SummaryWriter
+from . import reporting
 import torch
 
 class TBWriter(object):
     def __init__(self, run_name_fmt="run_{}"):
-        self.run_name = run_name_fmt.format(datetime.datetime.now().strftime("%Y-%m-%d-%H_%M_%S"))
-        self.writer =SummaryWriter("../tb_logs/"+self.run_name)#+run_name_fmt.format(datetime.datetime.now().strftime("%Y-%m-%d-%H_%M_%S"))) #SummaryWriter("../lb_logs/")
-        self.writer = SummaryWriter(os.path.join("../tb_logs/",self.run_name))
+        self.run_name = run_name_fmt.format(reporting.timestamp())
+        self.writer = SummaryWriter(os.path.join("../tb_logs/",reporting.daystamp(),self.run_name))
         self.train_idx = 0
         self.acc_idx = 0
         self.dps_index=0
