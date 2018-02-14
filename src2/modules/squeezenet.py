@@ -122,6 +122,8 @@ class WideResFire(serialmodule.SerializableModule):
             out=out+x
         return out
 
+
+
 class FireSkipMode(Enum):
     NONE=0
     SIMPLE=1
@@ -130,7 +132,10 @@ class FireSkipMode(Enum):
 SqueezeNetConfig=collections.namedtuple("SqueezeNetConfig","in_channels, base, incr, prop3, freq, sr, out_dim, skipmode, resfire, dropout_rate, num_fires, pool_interval, conv1_stride, conv1_size, pooling_count_offset, wide_resfire, num_conv1_filters")
 class SqueezeNet(serialmodule.SerializableModule):
     '''
-        Based on Squeezenet by Iandola et al.
+        Used ideas from
+        -Squeezenet by Iandola et al.
+        -Resnet by He et al.
+
     '''
     @staticmethod
     def default(in_size,out_dim):

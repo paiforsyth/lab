@@ -144,6 +144,9 @@ def make_context(args):
    elif args.lr_scheduler == "linear":
         lam = lambda epoch: 1-args.linear_scheduler_subtract_factor* min(epoch,args.linear_scheduler_max_epoch)/args.linear_scheduler_max_epoch 
         scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lam )
+   elif args.lr_scheduler == "multistep":
+        milestones=[args.multistep_scheduler_milestone1, args.multistep_scheduler_milestone2]
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=args.lr_gamma )
    elif args.lr_scheduler == None:
        scheduler = None
    else: 
@@ -227,7 +230,7 @@ def run(args):
         context.tb_writer.write_accuracy(eval_score)
         logging.info("Finished epoch number "+ str(epoch_count+1) +  " of " +str(args.num_epochs)+".  Accuracy is "+ str(eval_score) +".")
         if context.scheduler is not None:
-            if args.lr_scheduler == "exponential" or args.lr_scheduler == "linear":
+            if args.lr_scheduler == "exponential" or args.lr_scheduler == "linear" or args.lr_scheduler == "multistep":
                 context.tb_writer.write_lr(context.scheduler.get_lr()[0] )
                 context.scheduler.step()
             elif args.lr_scheduler == "plateau":
