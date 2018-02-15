@@ -144,6 +144,8 @@ class ExcitationFire(serialmodule.SerializableModule):
         self.wrapped=fire_to_wrap
         self.expand=nn.Linear(compressed_dim, out_channels)
         self.skip=skip
+        if skip:
+            logging.info("Creating ExcitationFire with skip layer")
     def forward(self, x):
         z=torch.mean(x,3)
         z=torch.mean(z,2)
