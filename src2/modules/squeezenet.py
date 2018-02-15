@@ -29,6 +29,9 @@ def add_args(parser):
     parser.add_argument("--squeezenet_dense_k",type=int, default=12)
     parser.add_argument("--squeezenet_dense_fire_depths",type=str, default="default, shallow")
     parser.add_argument("--squeezenet_dense_fire_compress_level", type=float, default=0.5 )
+    parser.add_argument("--squeezenet_use_excitation",   action="store_true")
+    parser.add_argument("--squeezenet_excitation_r", type=int, default=16 )
+    
 
 
     
@@ -133,6 +136,28 @@ class FireSkipMode(Enum):
     SIMPLE=1
 
 
+class ExcitationFire(serialmodule.SerializableModule):
+    def __init__(self,fire_to_wrap, in_channels, out_channels, r, skip):
+        super().__init__()
+        compressed_dim=max(1,math.floor( in_channels/r  ))
+        self.compress=nn.Linear(in_channels, compressed_dim  )
+        self.wrapped=fire_to_wrap
+        self.expand=nn.Linear(compressed_dim, out_channels)
+        self.skip=skip
+    def forward(self, x):
+        z=torch.mean(x,3)
+        z=torch.mean(z,2)
+        z=self.compress(z)
+        z=F.leaky_relu(z)
+        z=self.expand(z)
+        z=F.sigmoid(z)
+        z=torch.unsqueeze(z,2)
+        z=torch.unsqueeze(z,3)
+        result=z*self.wrapped(x)
+        if self.skip:
+            result=result+x
+        return result
+
 class DenseFire(serialmodule.SerializableModule):
     def __init__(self, k0, num_subunits, k, prop3):
         super().__init__()
@@ -154,7 +179,7 @@ class DenseFire(serialmodule.SerializableModule):
 
 
 
-SqueezeNetConfig=collections.namedtuple("SqueezeNetConfig","in_channels, base, incr, prop3, freq, sr, out_dim, skipmode,  dropout_rate, num_fires, pool_interval, conv1_stride, conv1_size, pooling_count_offset, num_conv1_filters,  dense_fire_k,  dense_fire_depth_list, dense_fire_compression_level, mode")
+SqueezeNetConfig=collections.namedtuple("SqueezeNetConfig","in_channels, base, incr, prop3, freq, sr, out_dim, skipmode,  dropout_rate, num_fires, pool_interval, conv1_stride, conv1_size, pooling_count_offset, num_conv1_filters,  dense_fire_k,  dense_fire_depth_list, dense_fire_compression_level, mode, use_excitation, excitation_r")
 class SqueezeNet(serialmodule.SerializableModule):
     '''
         Used ideas from
@@ -195,7 +220,9 @@ class SqueezeNet(serialmodule.SerializableModule):
                 mode= args.squeezenet_mode,
                 dense_fire_k=args.squeezenet_dense_k,
                 dense_fire_depth_list= depthlist,
-                dense_fire_compression_level=args.squeezenet_dense_fire_compress_level)
+                dense_fire_compression_level=args.squeezenet_dense_fire_compress_level,
+                use_excitation=args.squeezenet_use_excitation,
+                excitation_r=args.squeezenet_excitation_r)
         return SqueezeNet(config)
 
     def __init__(self, config):
@@ -235,11 +262,20 @@ class SqueezeNet(serialmodule.SerializableModule):
                 else:
                     skip_here=False
                 if config.mode == "wide_resfire":
-                    layer_dict["wide_resfire{}".format(i+2)]=WideResFire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
+                    name="wide_resfire{}".format(i+2)
+                    to_addi=WideResFire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
                 elif config.mode == "resfire":
-                    layer_dict["resfire{}".format(i+2)]=ResFire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
+                    name="resfire{}".format(i+2)
+                    to_add=ResFire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
                 else:
-                    layer_dict["fire{}".format(i+2)]=Fire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
+                    name="fire{}".format(i+2)
+                    to_add=Fire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
+
+                if config.use_excitation:
+                    to_add.skip=False 
+                    to_add=ExcitationFire(to_add, in_channels=self.channel_counts[i], out_channels=e, r=config.excitation_r, skip=skip_here)
+                    name="ExcitationFire{}".format(i+2)
+                layer_dict[name]=to_add
 
                 self.channel_counts.append(e)
 

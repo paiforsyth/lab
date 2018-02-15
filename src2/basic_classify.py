@@ -246,6 +246,6 @@ def run(args):
             context.model.save(os.path.join(args.model_save_path,timestamp+"recent_model" )  )
 
    logging.info("Loading best model")
-   context.model.load(os.path.join(timestamp + args.model_save_path,args.save_prefix +"_best_model"))
+   context.model.load(os.path.join( args.model_save_path,timestamp+ args.save_prefix +"_best_model"))
    if context.data_type == DataType.SEQUENCE:
         datatools.sequence_classification.write_evaulation_report(context, context.val_loader,os.path.join(args.timestamp + report_path,args.save_prefix +".txt") , category_names=context.category_names) 
