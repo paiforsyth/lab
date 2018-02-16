@@ -11,10 +11,9 @@ import basic_classify
 import datatools.word_vectors
 import modules.maxpool_lstm
 import genutil.modules
-
+import genutil.arguments
 #general rule: all used modules should be able to created just by passing args
 #todo: 
-#do some basic tests, like verifying that paramters change.  Consider using rmsprop
 def default_parser(parser=None):
     if parser is None:
         parser= argparse.ArgumentParser()
@@ -22,7 +21,7 @@ def default_parser(parser=None):
     parser.add_argument("--num_epochs",type=int,default=4)
     parser.add_argument("--validation_set_size",type=int,default=1000)
     parser.add_argument("--model_save_path",type=str, default= "../saved_models/") 
-    parser.add_argument("--resume_mode", type=str, choices=["none", "standard", "checkpoint_ensemble"], default= "none" )
+    parser.add_argument("--resume_mode", type=str, choices=["none", "standard", "ensemble"], default= "none" )
     parser.add_argument("--res_file",type=str, default="recent_model") 
     parser.add_argument("--mode", type=str, choices=["test", "train"], default="train")
     parser.add_argument("--test_report_filename", type=str)
@@ -49,25 +48,36 @@ def default_parser(parser=None):
 
     parser.add_argument("--grad_norm_clip",type=float, default=None)
     parser.add_argument("--output_level", type=str, choices=["info", "debug"], default="info") 
-    parser.add_argument("--first_checkpoints_in_ensemble", type=int, default=2)
-    parser.add_argument("--boundary_checkpoints_in_ensemble", type=int, default=6) #one beyond the last checkpoint
+   #parser.add_argument("--first_checkpoints_in_ensemble", type=int, default=2)
+  # parser.add_argument("--boundary_checkpoints_in_ensemble", type=int, default=6) #one beyond the last checkpoint
+    parser.add_argument("--ensemble_args_files", type=str, action='append')
+    
 
     return parser
 
 
-
-
-
+def get_args_from_files(filenames):
+   parser=default_parser()
+   parser=basic_classify.add_args(parser)
+   args_list=[]
+   for filename in filenames:
+        args=genutil.arguments.parse_from_file(filename, parser)
+        args_list.append(args)
+   return args_list
+    
 
 
 def main():
    logging.basicConfig(level=logging.INFO)
    parser=default_parser()
-
-
-
    parser=basic_classify.add_args(parser)
    args=parser.parse_args()
+   if args.resume_mode == "ensemble":
+      args_list=get_args_from_files(args.ensemble_args_files)
+      basic_classify.run(args_list, ensemble_test=True)
+      return
+
+
    if args.param_report:
        show_params()
        return

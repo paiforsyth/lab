@@ -1,0 +1,2 @@
+--save_prefix=mnist-checkpoint-run --dataset_for_classification=mnist --model_type=squeezenet --squeezenet_out_dim=10 --squeezenet_dropout_rate=0.5 --num_epochs=100 --squeezenet_prop3=0.1 --param_difs --optimizer=rmsprop --init_lr=0.0001 --lr_scheduler=epoch_anneal --epoch_anneal_numcycles=5 --fire_skip_mode=simple --cuda	
+

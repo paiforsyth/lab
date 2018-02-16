@@ -172,27 +172,25 @@ def make_context(args):
 
 
 
-def run(args):
+def run(args, ensemble_test=False):
+   if ensemble_test:
+       assert type(args) is list
+       contexts=[make_context(arg_instance) for arg_instance in args ]
+       for context, arg_instance in zip(contexts,args):
+            logging.info("loading saved model from file: "+arg_instance.res_file)
+            context.model.load(os.path.join(arg_instance.model_save_path, arg_instance.res_file))
+       datatools.basic_classification.make_ensemble_prediction_report(contexts, contexts[0].test_loader, args[0].test_report_filename)
+       return
 
    context=make_context(args) 
 
    if args.resume_mode == "standard":
        logging.info("loading saved model from file: "+args.res_file)
        context.model.load(os.path.join(args.model_save_path, args.res_file))
-   elif args.resume_mode == "checkpoint_ensemble":
-       assert args.mode == "test"
    
    if args.mode == "test":
-       if args.resume_mode == "checkpoint_ensemble":
-            models=[]
-            for i in range(args.first_checkpoint_in_ensemble, args.boundary_checkpoint_in_ensemble):
-                cur_model=copy.deepcopy(context.model)
-                cur_model.load(os.path.join(args.model_save_path, args.res_file +"_checkpoint_" + str(i)))
-                models.append(cur_model)
-            datatools.basic_classification.make_ensemble_prediction_report(context, context.test_loader,args.test_report_filename,models ) 
-       else:
-            datatools.basic_classification.make_prediction_report(context, context.test_loader,args.test_report_filename ) 
-       return
+        datatools.basic_classification.make_prediction_report(context, context.test_loader,args.test_report_filename ) 
+        return
 
 
    if args.lr_scheduler == "epoch_anneal":
