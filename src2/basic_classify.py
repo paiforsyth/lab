@@ -256,7 +256,7 @@ def run(args):
             elif args.lr_scheduler == "epoch_anneal":
                 context.tb_writer.write_lr(context.scheduler.cur_lr() )
                 context.scheduler.step()
-                if contex.scheduler.cur_step == contex.scheduler.Tmax:
+                if context.scheduler.cur_step == context.scheduler.Tmax:
                     logging.info("Hit  min learning rate.  Restarting learning rate annealing.")
                     context.scheduler.cur_step = -1
                     epoch_anneal_cur_cycle+=1
