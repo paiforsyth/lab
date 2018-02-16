@@ -41,6 +41,32 @@ def predict(context, loader):
    context.model.train()
    return overall_predictions 
 
+def ensemble_predict(context, loader, model_list):
+   for model in model_list:
+        model.eval()
+   overall_predictions=[]
+   logging.info("Predicting.")
+   for batch, *other in loader:
+        categories=other[0]
+        if context.data_type==DataType.SEQUENCE:
+            pad_mat = other[1]
+
+        scores_list=[]
+        for model in model_list:
+            scores= model(batch,pad_mat) if context.data_type == DataType.SEQUENCE else context.model(batch)  #should have dimension batchsize by number of categories
+            scores=F.softmax(scores,dim=1)
+            scores=scores.unsqueeze(2)
+            scores_list.append(scores)
+        combined_scores=torch.cat(scores_list,dim=2)
+        combined_scores=torch.mean(combined_scores,dim=2)
+
+        _,predictions_this_batch=torch.max(combined_scores,dim=1)
+        overall_predictions.extend(predictions_this_batch.data.tolist())
+   for model in model_list:
+        model.train()
+   return overall_predictions 
+
+
 def make_prediction_report(context, loader, filename):
     f=open(filename,"w")
     f.write("ids,labels\n")
@@ -50,7 +76,14 @@ def make_prediction_report(context, loader, filename):
         f.write(str(index)+","+str(prediction) + "\n")
     f.close()
 
-
+def make_ensemble_prediction_report(context, loader, filename, model_list):
+    f=open(filename,"w")
+    f.write("ids,labels\n")
+    predictions = ensemble_predict(context, loader,model_list)
+    index=0
+    for index, prediction in enumerate(predictions):
+        f.write(str(index)+","+str(prediction) + "\n")
+    f.close()
 
 def make_var_wrap_collater(args):
     def collater(batch_in):

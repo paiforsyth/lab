@@ -11,6 +11,7 @@ def add_args(parser):
     parser.add_argument("--squeezenet_in_channels",type=int, default=1)
     parser.add_argument("--squeezenet_base",type=int, default=128)
     parser.add_argument("--squeezenet_incr",type=int, default=128)
+    parser.add_argument("--squeezenet_multiplicative_incr", type=int, default=2)
     parser.add_argument("--squeezenet_prop3",type=float, default=0.5)
     parser.add_argument("--squeezenet_freq",type=int, default=2)
     parser.add_argument("--squeezenet_sr",type=float, default=0.125)
@@ -20,6 +21,7 @@ def add_args(parser):
 
     parser.add_argument("--squeezenet_dropout_rate",type=float)
     parser.add_argument("--fire_skip_mode", type=str, choices=["simple", "none"], default= "none")
+    parser.add_argument("--squeezenet_pool_interval_mode",type=str, choices=["add","multiply"], default="add")
     parser.add_argument("--squeezenet_pool_interval",type=int, default=4)
     parser.add_argument("--squeezenet_num_fires", type=int, default=8)
     parser.add_argument("--squeezenet_conv1_stride", type=int, default=2)
@@ -31,6 +33,7 @@ def add_args(parser):
     parser.add_argument("--squeezenet_dense_fire_compress_level", type=float, default=0.5 )
     parser.add_argument("--squeezenet_use_excitation",   action="store_true")
     parser.add_argument("--squeezenet_excitation_r", type=int, default=16 )
+    parser.add_argument("--squeezenet_local_dropout_rate", type=int, default=0 )
     
 
 
@@ -102,7 +105,7 @@ class WideResFire(serialmodule.SerializableModule):
     '''
     @staticmethod 
     def from_configure(configure):
-        return WideResFire(in_channels= configure.in_channels, num_squeeze= configure.num_squeeze,num_expand1= configure.num_expand1,num_expand3= configure.num_expand3, skip=configure.skip)
+        return WideResFire(in_channels= configure.in_channels, num_squeeze= configure.num_squeeze,num_expand1= configure.num_expand1,num_expand3= configure.num_expand3, skip=configure.skip, local_dropout_rate=0)
 
 
     def __init__(self, in_channels, num_squeeze, num_expand1, num_expand3, skip):
@@ -115,6 +118,7 @@ class WideResFire(serialmodule.SerializableModule):
       self.skip=skip
       if skip:
           assert(num_expand1+ num_expand3 == in_channels)
+      self.local_dropout_rate=local_dropout_rate
     def forward(self, x):
         '''
             Args:
@@ -123,6 +127,7 @@ class WideResFire(serialmodule.SerializableModule):
         out = self.bn1(x)
         out = F.leaky_relu(out)
         out = self.squeezeconv(out)
+        out = F.dropout(out, p=self.local_dropout_rate)
         out = self.bn2(out)
         out = F.leaky_relu(out)
         out= torch.cat( [self.expand1conv(out), self.expand3conv(out)], dim=1  ) 
@@ -181,7 +186,7 @@ class DenseFire(serialmodule.SerializableModule):
 
 
 
-SqueezeNetConfig=collections.namedtuple("SqueezeNetConfig","in_channels, base, incr, prop3, freq, sr, out_dim, skipmode,  dropout_rate, num_fires, pool_interval, conv1_stride, conv1_size, pooling_count_offset, num_conv1_filters,  dense_fire_k,  dense_fire_depth_list, dense_fire_compression_level, mode, use_excitation, excitation_r")
+SqueezeNetConfig=collections.namedtuple("SqueezeNetConfig","in_channels, base, incr, prop3, freq, sr, out_dim, skipmode,  dropout_rate, num_fires, pool_interval, conv1_stride, conv1_size, pooling_count_offset, num_conv1_filters,  dense_fire_k,  dense_fire_depth_list, dense_fire_compression_level, mode, use_excitation, excitation_r, pool_interval_mode, multiplicative_incr, local_dropout_rate")
 class SqueezeNet(serialmodule.SerializableModule):
     '''
         Used ideas from
@@ -224,7 +229,11 @@ class SqueezeNet(serialmodule.SerializableModule):
                 dense_fire_depth_list= depthlist,
                 dense_fire_compression_level=args.squeezenet_dense_fire_compress_level,
                 use_excitation=args.squeezenet_use_excitation,
-                excitation_r=args.squeezenet_excitation_r)
+                excitation_r=args.squeezenet_excitation_r,
+                pool_interval_mode=args.squeezenet_pool_interval_mode,
+                multiplicative_incr=args.squeezenet_multiplicative_incr,
+                local_dropout_rate = args.squeezenet_local_dropout_rate
+                )
         return SqueezeNet(config)
 
     def __init__(self, config):
@@ -254,18 +263,21 @@ class SqueezeNet(serialmodule.SerializableModule):
         self.channel_counts=[ first_layer_num_convs]#initial number of channels entering ith fire layer (labeled i+2 to match paper)
         for i in range(num_fires):
             if  config.mode != "dense_fire":
-                e=config.base+config.incr*math.floor(i/config.freq)
+                if config.pool_interval_mode == "add":
+                    e=config.base+config.incr*math.floor(i/config.freq)
+                elif config.pool_interval_mode == "multiply":
+                    e=config.base* (config.multiplicative_incr ** math.floor(i/config.freq)) 
                 num_squeeze=max(math.floor(config.sr*e),1)
                 num_expand3=max(math.floor(config.prop3*e),1)
                 num_expand1=e-num_expand3
-                if config.skipmode == FireSkipMode.SIMPLE and e == self.channel_counts[i] :
+                if config.skipmode == FireSkipMode.SIMPLE and e == self.channel_counts[i]:
                     skip_here=True
                     logging.info("Making simple skip layer.")
                 else:
                     skip_here=False
                 if config.mode == "wide_resfire":
                     name="wide_resfire{}".format(i+2)
-                    to_addi=WideResFire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
+                    to_addi=WideResFire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here, local_dropout_rate=config.local_dropout_rate ))
                 elif config.mode == "resfire":
                     name="resfire{}".format(i+2)
                     to_add=ResFire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))

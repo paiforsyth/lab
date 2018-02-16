@@ -4,6 +4,7 @@ import time
 import collections
 import os.path
 import pickle
+import copy
 import torch.utils.data as data
 import torch.nn as nn
 import torch.nn.utils.clip_grad
@@ -42,6 +43,7 @@ def add_args(parser):
     parser.add_argument("--reports_per_epoch", type=int,default=10)
     parser.add_argument("--save_prefix", type=str,default=None)
     parser.add_argument("--model_type", type=str, choices=["maxpool_lstm_fc", "kimcnn", "squeezenet"],default="maxpool_lstm_fc")
+
     modules.kim_cnn.add_args(parser)
     modules.squeezenet.add_args(parser)
     
@@ -110,7 +112,7 @@ def make_context(args):
             val_loader=data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle= False, collate_fn=datatools.basic_classification.make_var_wrap_collater(args))
        elif  args.mode == "test":
             test_loader=data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle= False, collate_fn=datatools.basic_classification.make_var_wrap_collater(args))
-            assert(args.resume)
+            assert(args.resume_mode == "standard" or args.resume_mode == "checkpoint_ensemble")
    else:
        raise Exception("Unknown data type.")
         
@@ -147,6 +149,8 @@ def make_context(args):
    elif args.lr_scheduler == "multistep":
         milestones=[args.multistep_scheduler_milestone1, args.multistep_scheduler_milestone2]
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=args.lr_gamma )
+   elif args.lr_scheduler == "epoch_anneal":
+       scheduler= torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max= args.num_epochs//args.epoch_anneal_numcycles)
    elif args.lr_scheduler == None:
        scheduler = None
    else: 
@@ -171,16 +175,28 @@ def run(args):
 
    context=make_context(args) 
 
-   if args.resume:
+   if args.resume_mode == "standard":
        logging.info("loading saved model from file: "+args.res_file)
        context.model.load(os.path.join(args.model_save_path, args.res_file))
+   elif args.resume_mode == "checkpoint_ensemble":
+       assert args.mode == "test"
    
    if args.mode == "test":
-       datatools.basic_classification.make_prediction_report(context, context.test_loader,args.test_report_filename ) 
+       if args.resume_mode == "checkpoint_ensemble":
+            models=[]
+            for i in range(args.first_checkpoint_in_ensemble, args.boundary_checkpoint_in_ensemble):
+                cur_model=copy.deepcopy(context.model)
+                cur_model.load(os.path.join(args.model_save_path, args.res_file +"_checkpoint_" + str(i)))
+                models.append(cur_model)
+            datatools.basic_classification.make_ensemble_prediction_report(context, context.test_loader,args.test_report_filename,models ) 
+       else:
+            datatools.basic_classification.make_prediction_report(context, context.test_loader,args.test_report_filename ) 
        return
 
 
-
+   if args.lr_scheduler == "epoch_anneal":
+        epoch_anneal_cur_cycle=0
+        
 
    context.tb_writer.write_hyperparams()
    timestamp=monitoring.reporting.timestamp()
@@ -236,16 +252,30 @@ def run(args):
             elif args.lr_scheduler == "plateau":
                # context.tb_writer.write_lr(next(context.optimizer.param_groups)['lr'] )
                 context.scheduler.step(eval_score)
+            elif args.lr_scheduler == "epoch_anneal":
+                context.tb_writer.write_lr(context.scheduler.get_lr()[0] )
+                context.scheduler.step()
+                if contex.scheduler.last_epoch == contex.scheduler.T_max:
+                    logging.info("Hit  min learning rate.  Restarting learning rate annealing.")
+                    context.scheduler.last_epoch = -1
+                    epoch_anneal_cur_cycle+=1
+                    best_eval_score= -float("inf")
+                    
             else:
                 raise Exception("Unknown Scheduler")
 
         if eval_score > best_eval_score:
             best_eval_score=eval_score
             logging.info("Saving model")
-            context.model.save(os.path.join(args.model_save_path,timestamp+args.save_prefix +"_best_model" )  )
             context.model.save(os.path.join(args.model_save_path,timestamp+"recent_model" )  )
+            
+            if args.lr_scheduler == "epoch_anneal":
+                logging.info("saving as checkpoint" + str(epoch_anneal_cur_cycle))
+                context.model.save(os.path.join(args.model_save_path,timestamp+args.save_prefix +"_checkpoint_" +str(epoch_anneal_cur_cycle) )  )
+            else:
+                context.model.save(os.path.join(args.model_save_path,timestamp+args.save_prefix +"_best_model" )  )
 
-   logging.info("Loading best model")
-   context.model.load(os.path.join( args.model_save_path,timestamp+ args.save_prefix +"_best_model"))
-   if context.data_type == DataType.SEQUENCE:
-        datatools.sequence_classification.write_evaulation_report(context, context.val_loader,os.path.join(args.timestamp + report_path,args.save_prefix +".txt") , category_names=context.category_names) 
+  # logging.info("Loading best model")
+   #context.model.load(os.path.join( args.model_save_path,timestamp+ args.save_prefix +"_best_model"))
+   #if context.data_type == DataType.SEQUENCE:
+    #    datatools.sequence_classification.write_evaulation_report(context, context.val_loader,os.path.join(args.timestamp + report_path,args.save_prefix +".txt") , category_names=context.category_names) 

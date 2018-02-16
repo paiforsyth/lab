@@ -22,7 +22,7 @@ def default_parser(parser=None):
     parser.add_argument("--num_epochs",type=int,default=4)
     parser.add_argument("--validation_set_size",type=int,default=1000)
     parser.add_argument("--model_save_path",type=str, default= "../saved_models/") 
-    parser.add_argument("--resume", action="store_true" )
+    parser.add_argument("--resume_mode", type=str, choices=["none", "standard", "checkpoint_ensemble"], default= "none" )
     parser.add_argument("--res_file",type=str, default="recent_model") 
     parser.add_argument("--mode", type=str, choices=["test", "train"], default="train")
     parser.add_argument("--test_report_filename", type=str)
@@ -38,17 +38,19 @@ def default_parser(parser=None):
     parser.add_argument("--sgd_momentum",type=float, default=0)
     parser.add_argument("--sgd_weight_decay", type=float, default=0)
     parser.add_argument("--plateau_lr_scheduler_patience",type=int, default=10)
-    parser.add_argument("--lr_scheduler",type=str, choices=[None, "exponential", "plateau", "linear", "multistep"], default="exponential")
+    parser.add_argument("--lr_scheduler",type=str, choices=[None, "exponential", "plateau", "linear", "multistep", "epoch_anneal"], default="exponential")
     parser.add_argument("--lr_gamma",type=float, default=0.99)
     parser.add_argument("--linear_scheduler_max_epoch", type=int, default=300)
     parser.add_argument("--linear_scheduler_subtract_factor", type=float, default=0.99)
     parser.add_argument("--multistep_scheduler_milestone1", type=int, default=150)
     parser.add_argument("--multistep_scheduler_milestone2", type=int, default=225)
+    parser.add_argument("--epoch_anneal_numcycles", type=int, default=6)
+
 
     parser.add_argument("--grad_norm_clip",type=float, default=None)
-    parser.add_argument("--output_level", type=str, choices=["info", "debug"], default="info")
-    
-
+    parser.add_argument("--output_level", type=str, choices=["info", "debug"], default="info") 
+    parser.add_argument("--first_checkpoints_in_ensemble", type=int, default=2)
+    parser.add_argument("--boundary_checkpoints_in_ensemble", type=int, default=6) #one beyond the last checkpoint
 
     return parser
 
