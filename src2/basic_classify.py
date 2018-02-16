@@ -246,6 +246,19 @@ def run(args):
         eval_score=datatools.basic_classification.evaluate(context, context.val_loader)
         context.tb_writer.write_accuracy(eval_score)
         logging.info("Finished epoch number "+ str(epoch_count+1) +  " of " +str(args.num_epochs)+".  Accuracy is "+ str(eval_score) +".")
+
+        if eval_score > best_eval_score:
+            best_eval_score=eval_score
+            logging.info("Saving model")
+            context.model.save(os.path.join(args.model_save_path,timestamp+"recent_model" )  )
+            
+            if args.lr_scheduler == "epoch_anneal":
+                logging.info("saving as checkpoint" + str(epoch_anneal_cur_cycle))
+                context.model.save(os.path.join(args.model_save_path,timestamp+args.save_prefix +"_checkpoint_" +str(epoch_anneal_cur_cycle) )  )
+            else:
+                context.model.save(os.path.join(args.model_save_path,timestamp+args.save_prefix +"_best_model" )  )
+
+
         if context.scheduler is not None:
             if args.lr_scheduler == "exponential" or args.lr_scheduler == "linear" or args.lr_scheduler == "multistep":
                 context.tb_writer.write_lr(context.scheduler.get_lr()[0] )
@@ -265,18 +278,7 @@ def run(args):
             else:
                 raise Exception("Unknown Scheduler")
 
-        if eval_score > best_eval_score:
-            best_eval_score=eval_score
-            logging.info("Saving model")
-            context.model.save(os.path.join(args.model_save_path,timestamp+"recent_model" )  )
-            
-            if args.lr_scheduler == "epoch_anneal":
-                logging.info("saving as checkpoint" + str(epoch_anneal_cur_cycle))
-                context.model.save(os.path.join(args.model_save_path,timestamp+args.save_prefix +"_checkpoint_" +str(epoch_anneal_cur_cycle) )  )
-            else:
-                context.model.save(os.path.join(args.model_save_path,timestamp+args.save_prefix +"_best_model" )  )
-
-  # logging.info("Loading best model")
+         # logging.info("Loading best model")
    #context.model.load(os.path.join( args.model_save_path,timestamp+ args.save_prefix +"_best_model"))
    #if context.data_type == DataType.SEQUENCE:
     #    datatools.sequence_classification.write_evaulation_report(context, context.val_loader,os.path.join(args.timestamp + report_path,args.save_prefix +".txt") , category_names=context.category_names) 
