@@ -14,8 +14,6 @@ import torch
 import torch.optim.lr_scheduler
 import numpy as np
 
-import genutil.scheduler
-
 
 import datatools.set_simp
 import datatools.set_polarity
@@ -30,6 +28,7 @@ import modules.kim_cnn
 import monitoring.reporting
 import monitoring.tb_log
 import genutil.modules
+import genutil.optimutil
 from torchvision import transforms
 import torchvision.datasets as tvds
 def add_args(parser):
@@ -152,7 +151,7 @@ def make_context(args):
         milestones=[args.multistep_scheduler_milestone1, args.multistep_scheduler_milestone2]
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=args.lr_gamma )
    elif args.lr_scheduler == "epoch_anneal":
-       scheduler= genutil.scheduler.CosineAnnealingLR(optimizer=optimizer, T_max= args.num_epochs//args.epoch_anneal_numcycles)
+       scheduler= genutil.optimutil.MyAnneal(optimizer=optimizer, Tmax= args.num_epochs//args.epoch_anneal_numcycles, init_lr=args.init_lr)
    elif args.lr_scheduler == None:
        scheduler = None
    else: 
@@ -255,11 +254,11 @@ def run(args):
                # context.tb_writer.write_lr(next(context.optimizer.param_groups)['lr'] )
                 context.scheduler.step(eval_score)
             elif args.lr_scheduler == "epoch_anneal":
-                context.tb_writer.write_lr(context.scheduler.get_lr()[0] )
+                context.tb_writer.write_lr(context.scheduler.cur_lr() )
                 context.scheduler.step()
                 if contex.scheduler.last_epoch == contex.scheduler.T_max:
                     logging.info("Hit  min learning rate.  Restarting learning rate annealing.")
-                    context.scheduler.last_epoch = -1
+                    context.scheduler.cur_step = -1
                     epoch_anneal_cur_cycle+=1
                     best_eval_score= -float("inf")
                     
