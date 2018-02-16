@@ -14,6 +14,8 @@ import torch
 import torch.optim.lr_scheduler
 import numpy as np
 
+import genutil.scheduler
+
 
 import datatools.set_simp
 import datatools.set_polarity
@@ -150,7 +152,7 @@ def make_context(args):
         milestones=[args.multistep_scheduler_milestone1, args.multistep_scheduler_milestone2]
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=args.lr_gamma )
    elif args.lr_scheduler == "epoch_anneal":
-       scheduler= torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max= args.num_epochs//args.epoch_anneal_numcycles)
+       scheduler= genutil.scheduler.CosineAnnealingLR(optimizer=optimizer, T_max= args.num_epochs//args.epoch_anneal_numcycles)
    elif args.lr_scheduler == None:
        scheduler = None
    else: 
