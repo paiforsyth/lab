@@ -53,7 +53,7 @@ def add_args(parser):
 #Context=collections.namedtuple("Context","model, train_loader, val_loader, optimizer, indexer, category_names, tb_writer, train_size, data_type, scheduler, test_loader")
 
 class Context:
-    def __init__(self, model, train_loader, val_loader, optimizer,indexer, category_names, tb_writer, train_size, data_type, scheduler, test_loader):
+    def __init__(self, model, train_loader, val_loader, optimizer,indexer, category_names, tb_writer, train_size, data_type, scheduler, test_loader,cuda):
         self.model=model
         self.train_loader=train_loader
         self.val_loader=val_loader
@@ -64,6 +64,7 @@ class Context:
         self.data_type=data_type
         self.scheduler=scheduler
         self.test_loader=test_loader
+        self.cuda=cuda
         
         self.stashfile=None
 
@@ -73,7 +74,8 @@ class Context:
         self.model=None
     def unstash_model(self):
         self.model=torch.load(self.stashfile)
-        ://allmychanges.com/p/python/tqdm/ ontext.model.eval()
+        if self.cuda:
+            self.model=self.mode.cuda()
         self.stashfile=None
 
 
@@ -187,7 +189,7 @@ def make_context(args):
        train_size= None
        train_loader = None
        val_loader = None
-   return Context(model, train_loader, val_loader, optimizer, indexer, category_names=category_names, tb_writer=monitoring.tb_log.TBWriter("{}_"+args.save_prefix), train_size=train_size, data_type=data_type, scheduler=scheduler, test_loader=test_loader)
+   return Context(model, train_loader, val_loader, optimizer, indexer, category_names=category_names, tb_writer=monitoring.tb_log.TBWriter("{}_"+args.save_prefix), train_size=train_size, data_type=data_type, scheduler=scheduler, test_loader=test_loader, cuda=args.cuda)
 
 
 
