@@ -7,6 +7,8 @@ import torch.optim as optim
 import torch.nn.functional as F
 import copy
 
+import external
+
 import basic_classify
 import datatools.word_vectors
 import modules.maxpool_lstm
@@ -52,6 +54,7 @@ def default_parser(parser=None):
     
     parser.add_argument("--ensemble_autogen_args", action="store_true")# for the autogen case  
     parser.add_argument("--ensemble_models_files", type=str, action='append')
+    parser.add_argument("--epoch_anneal_save_last", action="store_true")
 
 
     return parser
@@ -98,7 +101,7 @@ def main():
 
 
 
-def show_params():
+def show_params(input_size=(32,3,32,32)):
    logging.basicConfig(level=logging.DEBUG)
    parser=default_parser()
    parser=basic_classify.add_args(parser)
@@ -109,7 +112,8 @@ def show_params():
        print(param.shape)
        print(param.requires_grad)
    param_count = genutil.modules.count_trainable_params(context.model)
-   print("total trainable params:{}".format(param_count))
+   print("total trainable params:{}".format(param_count)) 
+
     
 
 def show_submods():

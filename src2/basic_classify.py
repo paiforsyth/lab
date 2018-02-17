@@ -300,8 +300,11 @@ def run(args, ensemble_test=False):
                 if context.scheduler.cur_step == context.scheduler.Tmax:
                     logging.info("Hit  min learning rate.  Restarting learning rate annealing.")
                     context.scheduler.cur_step = -1
-                    epoch_anneal_cur_cycle+=1
                     best_eval_score= -float("inf")
+                    if args.epoch_anneal_save_last:
+                        context.model.save(os.path.join(args.model_save_path,timestamp+args.save_prefix +"_endofcycle_checkpoint_" +str(epoch_anneal_cur_cycle) )  )
+                    epoch_anneal_cur_cycle+=1
+
                     
             else:
                 raise Exception("Unknown Scheduler")
