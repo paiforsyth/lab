@@ -101,6 +101,7 @@ def make_context(args):
         val_dataset = tvds.MNIST('../data/mnist', train=False, download=True, transform=transforms.Compose([transforms.ToTensor(),transforms.Normalize((0,), (1,))]))
         category_names={0:"1",1:"2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9"}
         data_type = DataType.IMAGE 
+        test_dataset=val_dataset #for testing
    elif args.dataset_for_classification == "cifar_challenge":
         if args.mode == "train":
             f=open("../data/cifar/train_data","rb")
@@ -137,7 +138,7 @@ def make_context(args):
             val_loader=data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle= False, collate_fn=datatools.basic_classification.make_var_wrap_collater(args))
        elif  args.mode == "test":
             test_loader=data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle= False, collate_fn=datatools.basic_classification.make_var_wrap_collater(args))
-            assert(args.resume_mode == "standard" or args.resume_mode == "checkpoint_ensemble")
+            assert(args.resume_mode == "standard" or args.resume_mode == "ensemble")
    else:
        raise Exception("Unknown data type.")
         

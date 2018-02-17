@@ -77,7 +77,7 @@ def main():
       if args.ensemble_autogen_args:
             args_list=[]
             for filename in args.ensemble_models_files:
-                cur_args=coopy.deep_copy(args)
+                cur_args=copy.deepcopy(args)
                 cur_args.res_file=filename
                 args_list.append(cur_args)
       else:

@@ -50,7 +50,9 @@ def ensemble_predict(contexts, loader):
    '''
    overall_predictions=[]
    logging.info("Predicting.")
-   score_list_2d=[[]]*len(loader)
+   score_list_2d=[]
+   for i in range(len(loader)):
+        score_list_2d.append([])
    for context in contexts:
        context.unstash_model()
        context.model.eval()
@@ -71,7 +73,7 @@ def ensemble_predict(contexts, loader):
         batch_mean_scores.append(torch.mean(torch.cat(score_list_2d[i],dim=2),dim=2 ))
    batch_mean_score_tensor=torch.cat(batch_mean_scores, dim=0)
    _,predictions=torch.max(batch_mean_score_tensor,dim=1)
-   return predictions.to_list() 
+   return predictions.tolist() 
 
 
 def make_prediction_report(context, loader, filename):
@@ -84,9 +86,9 @@ def make_prediction_report(context, loader, filename):
     f.close()
 
 def make_ensemble_prediction_report(contexts, loader, filename):
+    predictions = ensemble_predict(contexts, loader)
     f=open(filename,"w")
     f.write("ids,labels\n")
-    predictions = ensemble_predict(contexts, loader)
     index=0
     for index, prediction in enumerate(predictions):
         f.write(str(index)+","+str(prediction) + "\n")
