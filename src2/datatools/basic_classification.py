@@ -1,4 +1,5 @@
 from enum import Enum
+from tqdm import tqdm
 import logging
 import torch.nn.functional as F
 import torch
@@ -27,6 +28,8 @@ def evaluate(context, loader):
 
 
 def predict(context, loader): 
+   '''
+   '''
    context.model.eval()
    overall_predictions=[]
    logging.info("Predicting.")
@@ -42,29 +45,33 @@ def predict(context, loader):
    return overall_predictions 
 
 def ensemble_predict(contexts, loader):
-   for context in contexts:
-        context.model.eval()
+   '''
+   Note: models are expected to be stashed
+   '''
    overall_predictions=[]
    logging.info("Predicting.")
-   for batch, *other in loader:
-        categories=other[0]
-        if contexts[0].data_type==DataType.SEQUENCE:
-            pad_mat = other[1]
+   score_list_2d=[[]]*len(loader)
+   for context in contexts:
+       context.unstash_model()
+       context.model.eval()
+       for i, (batch, *other) in tqdm(enumerate(loader)):
+            categories=other[0]
+            if context.data_type==DataType.SEQUENCE:
+                pad_mat = other[1]
 
-        scores_list=[]
-        for context in contexts:
             scores= context.model(batch,pad_mat) if context.data_type == DataType.SEQUENCE else context.model(batch)  #should have dimension batchsize by number of categories
             scores=F.softmax(scores,dim=1)
             scores=scores.unsqueeze(2)
-            scores_list.append(scores)
-        combined_scores=torch.cat(scores_list,dim=2)
-        combined_scores=torch.mean(combined_scores,dim=2)
-
-        _,predictions_this_batch=torch.max(combined_scores,dim=1)
-        overall_predictions.extend(predictions_this_batch.data.tolist())
-   for context in contexts:
-       context. model.train()
-   return overall_predictions 
+            score_list_2d[i].append(scores.data)
+       context.model.train()
+       context.stash_model()
+    
+   batch_mean_scores=[]
+   for i in range(len(loader)):
+        batch_mean_scores.append(torch.mean(torch.cat(score_list_2d[i],dim=2),dim=2 ))
+   batch_mean_score_tensor=torch.cat(batch_mean_scores, dim=0)
+   _,predictions=torch.max(batch_mean_score_tensor,dim=1)
+   return predictions.to_list() 
 
 
 def make_prediction_report(context, loader, filename):

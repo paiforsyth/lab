@@ -5,7 +5,7 @@ import torch.utils.data as data
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-
+import copy
 
 import basic_classify
 import datatools.word_vectors
@@ -48,10 +48,11 @@ def default_parser(parser=None):
 
     parser.add_argument("--grad_norm_clip",type=float, default=None)
     parser.add_argument("--output_level", type=str, choices=["info", "debug"], default="info") 
-   #parser.add_argument("--first_checkpoints_in_ensemble", type=int, default=2)
-  # parser.add_argument("--boundary_checkpoints_in_ensemble", type=int, default=6) #one beyond the last checkpoint
     parser.add_argument("--ensemble_args_files", type=str, action='append')
     
+    parser.add_argument("--ensemble_autogen_args", action="store_true")# for the autogen case  
+    parser.add_argument("--ensemble_models_files", type=str, action='append')
+
 
     return parser
 
@@ -73,7 +74,14 @@ def main():
    parser=basic_classify.add_args(parser)
    args=parser.parse_args()
    if args.resume_mode == "ensemble":
-      args_list=get_args_from_files(args.ensemble_args_files)
+      if args.ensemble_autogen_args:
+            args_list=[]
+            for filename in args.ensemble_models_files:
+                cur_args=coopy.deep_copy(args)
+                cur_args.res_file=filename
+                args_list.append(cur_args)
+      else:
+        args_list=get_args_from_files(args.ensemble_args_files)
       basic_classify.run(args_list, ensemble_test=True)
       return
 

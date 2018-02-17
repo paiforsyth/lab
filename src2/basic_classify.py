@@ -50,9 +50,31 @@ def add_args(parser):
     
     return parser
 
-Context=collections.namedtuple("Context","model, train_loader, val_loader, optimizer, indexer, category_names, tb_writer, train_size, data_type, scheduler, test_loader")
+#Context=collections.namedtuple("Context","model, train_loader, val_loader, optimizer, indexer, category_names, tb_writer, train_size, data_type, scheduler, test_loader")
 
+class Context:
+    def __init__(self, model, train_loader, val_loader, optimizer,indexer, category_names, tb_writer, train_size, data_type, scheduler, test_loader):
+        self.model=model
+        self.train_loader=train_loader
+        self.val_loader=val_loader
+        self.optimizer=optimizer
+        self.categpry_names=category_names
+        self.tb_writer=tb_writer
+        self.train_size=train_size
+        self.data_type=data_type
+        self.scheduler=scheduler
+        self.test_loader=test_loader
+        
+        self.stashfile=None
 
+    def stash_model(self):
+        self.stashfile = "../temp/temp_storage_"+str(id(self))
+        torch.save(self.model, self.stashfile)
+        self.model=None
+    def unstash_model(self):
+        self.model=torch.load(self.stashfile)
+        ://allmychanges.com/p/python/tqdm/ ontext.model.eval()
+        self.stashfile=None
 
 
 def make_context(args):
@@ -175,10 +197,15 @@ def make_context(args):
 def run(args, ensemble_test=False):
    if ensemble_test:
        assert type(args) is list
-       contexts=[make_context(arg_instance) for arg_instance in args ]
+       contexts=[] #[make_context(arg_instance) for arg_instance in args ]
+       for arg_instance in args:
+           contexts.append(make_context(arg_instance))
+           contexts[-1].stash_model()
        for context, arg_instance in zip(contexts,args):
             logging.info("loading saved model from file: "+arg_instance.res_file)
+            context.unstash_model()
             context.model.load(os.path.join(arg_instance.model_save_path, arg_instance.res_file))
+            context.stash_model()
        datatools.basic_classification.make_ensemble_prediction_report(contexts, contexts[0].test_loader, args[0].test_report_filename)
        return
 
