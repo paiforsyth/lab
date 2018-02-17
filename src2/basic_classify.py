@@ -75,7 +75,7 @@ class Context:
     def unstash_model(self):
         self.model=torch.load(self.stashfile)
         if self.cuda:
-            self.model=self.mode.cuda()
+            self.model=self.model.cuda()
         self.stashfile=None
 
 
