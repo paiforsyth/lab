@@ -248,7 +248,7 @@ class SqueezeNet(serialmodule.SerializableModule):
         self.chunk_across_devices=config.chunk_across_devices
         if config.chunk_across_devices:
             assert len(config.layer_chunk_devices ) == config.num_layer_chunks  
-            assert confg.num_layer_chunks <= torch.cuda.device_count()
+            assert config.num_layer_chunks <= torch.cuda.device_count()
             logging.info("found: "+ str(torch.cuda.device_count()) +" cuda devices." )
             self.layer_chunk_devices=config.layer_chunk_devices
         assert(config.skipmode == FireSkipMode.NONE or config.skipmode == FireSkipMode.SIMPLE)
