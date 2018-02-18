@@ -50,10 +50,10 @@ def default_parser(parser=None):
 
     parser.add_argument("--grad_norm_clip",type=float, default=None)
     parser.add_argument("--output_level", type=str, choices=["info", "debug"], default="info") 
-    parser.add_argument("--ensemble_args_files", type=str, action='append')
+    parser.add_argument("--ensemble_args_files", type=str, nargs="+")
     
     parser.add_argument("--ensemble_autogen_args", action="store_true")# for the autogen case  
-    parser.add_argument("--ensemble_models_files", type=str, action='append')
+    parser.add_argument("--ensemble_models_files", type=str, nargs="+")
     parser.add_argument("--epoch_anneal_save_last", action="store_true")
 
 

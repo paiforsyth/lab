@@ -5,6 +5,7 @@ from enum import Enum
 import torch.nn as nn
 import torch.nn.functional as F
 import torch
+import torch.cuda
 from . import serialmodule
 
 def add_args(parser):
@@ -34,7 +35,9 @@ def add_args(parser):
     parser.add_argument("--squeezenet_use_excitation",   action="store_true")
     parser.add_argument("--squeezenet_excitation_r", type=int, default=16 )
     parser.add_argument("--squeezenet_local_dropout_rate", type=int, default=0 )
-    
+    parser.add_argument("--squeezenet_num_layer_chunks", type=int, default=1) 
+    parser.add_argument("--squeezenet_chunk_across_devices", action="store_true")
+    parser.add_argument("--squeezenet_layer_chunk_devices",type=int, nargs="+")
 
 
     
@@ -186,14 +189,14 @@ class DenseFire(serialmodule.SerializableModule):
 
 
 
-SqueezeNetConfig=collections.namedtuple("SqueezeNetConfig","in_channels, base, incr, prop3, freq, sr, out_dim, skipmode,  dropout_rate, num_fires, pool_interval, conv1_stride, conv1_size, pooling_count_offset, num_conv1_filters,  dense_fire_k,  dense_fire_depth_list, dense_fire_compression_level, mode, use_excitation, excitation_r, pool_interval_mode, multiplicative_incr, local_dropout_rate")
+SqueezeNetConfig=collections.namedtuple("SqueezeNetConfig","in_channels, base, incr, prop3, freq, sr, out_dim, skipmode,  dropout_rate, num_fires, pool_interval, conv1_stride, conv1_size, pooling_count_offset, num_conv1_filters,  dense_fire_k,  dense_fire_depth_list, dense_fire_compression_level, mode, use_excitation, excitation_r, pool_interval_mode, multiplicative_incr, local_dropout_rate, num_layer_chunks, chunk_across_devices, layer_chunk_devices")
 class SqueezeNet(serialmodule.SerializableModule):
     '''
         Used ideas from
         -Squeezenet by Iandola et al.
         -Resnet by He et al.
         -densenet by Huang et al.
-
+        -squeeze and excitation networks by Hu et al. 
     '''
     @staticmethod
     def default(in_size,out_dim):
@@ -232,12 +235,22 @@ class SqueezeNet(serialmodule.SerializableModule):
                 excitation_r=args.squeezenet_excitation_r,
                 pool_interval_mode=args.squeezenet_pool_interval_mode,
                 multiplicative_incr=args.squeezenet_multiplicative_incr,
-                local_dropout_rate = args.squeezenet_local_dropout_rate
+                local_dropout_rate = args.squeezenet_local_dropout_rate,
+                num_layer_chunks = args.squeezenet_num_layer_chunks,
+                chunk_across_devices = args.squeezenet_chunk_across_devices,
+                layer_chunk_devices = args.squeezenet_layer_chunk_devices
+
                 )
         return SqueezeNet(config)
 
     def __init__(self, config):
         super().__init__()
+        self.chunk_across_devices=config.chunk_across_devices
+        if config.chunk_across_devices:
+            assert len(config.layer_chunk_devices ) == config.num_layer_chunks  
+            assert confg.num_layer_chunks <= torch.cuda.device_count()
+            logging.info("found: "+ str(torch.cuda.device_count()) +" cuda devices." )
+            self.layer_chunk_devices=config.layer_chunk_devices
         assert(config.skipmode == FireSkipMode.NONE or config.skipmode == FireSkipMode.SIMPLE)
         if config.mode == "densefire":
             logging.info("Making a dense squeezenet.")
@@ -310,7 +323,21 @@ class SqueezeNet(serialmodule.SerializableModule):
         else: 
             layer_dict["final_conv"]=nn.Conv2d(self.channel_counts[-1], config.out_dim, kernel_size=1) 
             layer_dict["final_convrelu"]=nn.LeakyReLU()
-        self.sequential=nn.Sequential(layer_dict)
+        
+
+        chunk_size = len(layer_dict.items()) // config.num_layer_chunks
+        self.layer_chunk_list=[]
+        
+        for i in range( config.num_layer_chunks -1 ):
+            layer_chunk=nn.Sequential( collections.OrderedDict(list(layer_dict.items())[i*chunk_size:(i+1)*chunk_size]) )
+            self.add_module("layer_chunk_"+str(i),layer_chunk )
+            self.layer_chunk_list.append(layer_chunk)
+        layer_chunk=nn.Sequential( collections.OrderedDict(list(layer_dict.items())[ (config.num_layer_chunks-1)*chunk_size:]) )
+        self.add_module("layer_chunk_"+str(config.num_layer_chunks-1),layer_chunk )
+        self.layer_chunk_list.append(layer_chunk)
+         
+        #self.sequential=nn.Sequential(layer_dict)
+
 
     def forward(self, x):
         '''
@@ -319,11 +346,22 @@ class SqueezeNet(serialmodule.SerializableModule):
             reutrns:
                 -oput is batchsize by config.outdim
         '''
-        out=self.sequential(x)
-        out=torch.mean(out,dim=3)
-        out=torch.mean(out,dim=2)
-        return out
+        #out=self.sequential(x)
+
+        for i,layer_chunk in enumerate(self.layer_chunk_list):
+            if self.chunk_across_devices:
+                x.cuda(self.layer_chunk_devices[i])
+            x=layer_chunk(x)
+
+        x=torch.mean(x,dim=3)
+        x=torch.mean(x,dim=2)
+        return x
 
 
-
-
+    def cuda(self):
+        if not self.chunk_across_devices:
+            super().cuda()
+            return
+        for i,layer_chunk in enumerate(self.layer_chunk_list):
+            layer_chunk.cuda( self.layer_chunk_devices[i] )
+            logging.info("Chunk number "+ str(i)+" is on device number "+ str(next(layer_chunk.parameters()).get_device())  )
