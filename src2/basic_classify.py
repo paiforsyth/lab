@@ -254,6 +254,10 @@ def run(args, ensemble_test=False):
 
             context.optimizer.zero_grad()
             scores= context.model(batch_in,pad_mat) if context.data_type == DataType.SEQUENCE else context.model(batch_in)  #should have dimension batchsize
+            #move categories to same device as scores
+            if scores.is_cuda:
+                categories=categories.cuda(scores.get_device())
+
             loss=  F.cross_entropy(scores,categories) 
             loss.backward()
             if args.grad_norm_clip is not None:

@@ -21,6 +21,8 @@ def evaluate(context, loader):
         scores= context.model(batch,pad_mat) if context.data_type == DataType.SEQUENCE else context.model(batch)  #should have dimension batchsize
         scores=F.softmax(scores,dim=1)
         _,predictions=torch.max(scores,dim=1)
+        if predictions.is_cuda:
+            categories=categories.cuda(predictions.get_device())
         correct+= torch.sum(predictions==categories).cpu().data[0]
    context.model.train()
    return correct / total 
