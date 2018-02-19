@@ -353,7 +353,7 @@ class SqueezeNet(serialmodule.SerializableModule):
 
         for i,layer_chunk in enumerate(self.layer_chunk_list):
             if self.chunk_across_devices:
-                x.cuda(self.layer_chunk_devices[i])
+                x=x.cuda(self.layer_chunk_devices[i])
             x=layer_chunk(x)
 
         x=torch.mean(x,dim=3)
