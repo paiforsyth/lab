@@ -347,6 +347,9 @@ class SqueezeNet(serialmodule.SerializableModule):
                 -oput is batchsize by config.outdim
         '''
         #out=self.sequential(x)
+        
+
+
 
         for i,layer_chunk in enumerate(self.layer_chunk_list):
             if self.chunk_across_devices:

@@ -111,6 +111,8 @@ def show_params(input_size=(32,3,32,32)):
        print(name)
        print(param.shape)
        print(param.requires_grad)
+       print("device:")
+       print(param.get_device())
    param_count = genutil.modules.count_trainable_params(context.model)
    print("total trainable params:{}".format(param_count)) 
 
