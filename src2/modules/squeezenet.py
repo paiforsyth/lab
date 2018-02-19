@@ -365,3 +365,4 @@ class SqueezeNet(serialmodule.SerializableModule):
         for i,layer_chunk in enumerate(self.layer_chunk_list):
             layer_chunk.cuda( self.layer_chunk_devices[i] )
             logging.info("Chunk number "+ str(i)+" is on device number "+ str(next(layer_chunk.parameters()).get_device())  )
+        return self
