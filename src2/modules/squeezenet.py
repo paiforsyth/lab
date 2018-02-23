@@ -415,8 +415,7 @@ class SqueezeNet(serialmodule.SerializableModule):
 
     def cuda(self):
         if not self.chunk_across_devices:
-            super().cuda()
-            return
+            return  super().cuda()
         for i,layer_chunk in enumerate(self.layer_chunk_list):
             layer_chunk.cuda( self.layer_chunk_devices[i] )
             logging.info("Chunk number "+ str(i)+" is on device number "+ str(next(layer_chunk.parameters()).get_device())  )
