@@ -18,9 +18,9 @@ def add_args(parser):
     parser.add_argument("--squeezenet_sr",type=float, default=0.125)
     parser.add_argument("--squeezenet_out_dim",type=int)
 
-    parser.add_argument("--squeezenet_mode",type=str, choices=["resfire","wide_resfire","dense_fire","normal"], default="normal")
+    parser.add_argument("--squeezenet_mode",type=str, choices=["resfire","wide_resfire","dense_fire","next_fire","normal"], default="normal")
 
-    parser.add_argument("--squeezenet_dropout_rate",type=float)
+    parser.add_argument("--squeezenet_dropout_rate",type=float,default=0)
     parser.add_argument("--fire_skip_mode", type=str, choices=["simple", "none"], default= "none")
     parser.add_argument("--squeezenet_pool_interval_mode",type=str, choices=["add","multiply"], default="add")
     parser.add_argument("--squeezenet_pool_interval",type=int, default=4)
@@ -29,15 +29,18 @@ def add_args(parser):
     parser.add_argument("--squeezenet_conv1_size",type=int, default=7)
     parser.add_argument("--squeezenet_num_conv1_filters", type=int, default=96) 
     parser.add_argument("--squeezenet_pooling_count_offset", type=int, default=2) #should be greater than 0, otherwise you get a pool in the first layer
+    parser.add_argument("--squeezenet_max_pool_size",type=int, default=3)
     parser.add_argument("--squeezenet_dense_k",type=int, default=12)
     parser.add_argument("--squeezenet_dense_fire_depths",type=str, default="default, shallow")
     parser.add_argument("--squeezenet_dense_fire_compress_level", type=float, default=0.5 )
     parser.add_argument("--squeezenet_use_excitation",   action="store_true")
     parser.add_argument("--squeezenet_excitation_r", type=int, default=16 )
+    parser.add_argument("--squeezenet_next_fire_groups", type=int, default=32)
     parser.add_argument("--squeezenet_local_dropout_rate", type=int, default=0 )
     parser.add_argument("--squeezenet_num_layer_chunks", type=int, default=1) 
     parser.add_argument("--squeezenet_chunk_across_devices", action="store_true")
     parser.add_argument("--squeezenet_layer_chunk_devices",type=int, nargs="+")
+
 
 
     
@@ -100,6 +103,28 @@ class ResFire(serialmodule.SerializableModule):
         out= torch.cat( [self.expand1conv(out), self.expand3conv(out)], dim=1  ) 
         if self.skip:
             out=out+x
+        return out
+
+class NextFire(serialmodule.SerializableModule):
+
+    def __init__(self, in_channels, num_squeeze, num_expand,skip, groups=32 ):
+        super().__init__()
+        layer_dict = collections.OrderedDict()
+        layer_dict["bn1"] = nn.BatchNorm2d(in_channels)
+        layer_dict["leaky_reu1" ] = nn.LeakyReLU(inplace=True)
+        layer_dict["squeeze_conv"] = nn.Conv2d(in_channels, num_squeeze, (1,1))
+        layer_dict["bn2"] = nn.BatchNorm2d(num_squeeze)
+        layer_dict["leaky_relu2"] = nn.LeakyReLU(inplace=True)
+        layer_dict["group_conv"] = nn.Conv2d(num_squeeze, num_squeeze, kernel_size=3, padding=1, groups=groups)
+        layer_dict["bn3"] = nn.BatchNorm2d(num_squeeze)
+        layer_dict["leaky_relu3"] = nn.LeakyReLU(inplace=True)
+        layer_dict["expand_conv"] =  nn.Conv2d(num_squeeze, num_expand, kernel_size=1)
+        self.seq= nn.Sequential(layer_dict)
+        self.ski=skip
+    def forward(self, x):
+        out= self.seq(x)
+        if self.skip:
+            out = out + x
         return out
 
 class WideResFire(serialmodule.SerializableModule):
@@ -186,10 +211,32 @@ class DenseFire(serialmodule.SerializableModule):
             x=unit(torch.cat(xlist,dim=1)) #cat along filter dimension
         return x
 
+class DenseFireV2Layer(serialmodule.SerializableModule):
+    '''
+    Based on the more efficient official implementation of Densenet
+    https://github.com/pytorch/vision/blob/master/torchvision/models/densenet.py
+    '''
+    def __init__(self, input_size, k, num_squeeze, dropout_rate ):
+        super().__init__()
+        layerdict = collections.OrderedDict()
+        layerdict["batchnorm1"]=nn.BatchNorm2d(input_size)
+        layerdict["relu1"]=nn.ReLU(inplace=True)
+        layerdict["conv1"]=nn.Conv2d(input_size, num_squeeze, kernel_size=1)
+        layerdict["batchnorm2"]=nn.BatchNorm2d(num_squeeze)
+        layerdict["relu2"]=nn.ReLU(inplace=True)
+        layerdict["conv2"]=nn.Conv2d(num_squeeze, k, kernel_size=3, padding=1)
+        if dropout_rate>0:
+            layerdict["droupout"]=nn.Dropout(p=dropout_rate)
+        self.seq=nn.Sequential(layerdict)
+    def forward(self, x):
+        return torch.cat([x, self.seq(x)], dim = 1  )
+
+        
 
 
 
-SqueezeNetConfig=collections.namedtuple("SqueezeNetConfig","in_channels, base, incr, prop3, freq, sr, out_dim, skipmode,  dropout_rate, num_fires, pool_interval, conv1_stride, conv1_size, pooling_count_offset, num_conv1_filters,  dense_fire_k,  dense_fire_depth_list, dense_fire_compression_level, mode, use_excitation, excitation_r, pool_interval_mode, multiplicative_incr, local_dropout_rate, num_layer_chunks, chunk_across_devices, layer_chunk_devices")
+
+SqueezeNetConfig=collections.namedtuple("SqueezeNetConfig","in_channels, base, incr, prop3, freq, sr, out_dim, skipmode,  dropout_rate, num_fires, pool_interval, conv1_stride, conv1_size, pooling_count_offset, num_conv1_filters,  dense_fire_k,  dense_fire_depth_list, dense_fire_compression_level, mode, use_excitation, excitation_r, pool_interval_mode, multiplicative_incr, local_dropout_rate, num_layer_chunks, chunk_across_devices, layer_chunk_devices, next_fire_groups, max_pool_size")
 class SqueezeNet(serialmodule.SerializableModule):
     '''
         Used ideas from
@@ -238,8 +285,9 @@ class SqueezeNet(serialmodule.SerializableModule):
                 local_dropout_rate = args.squeezenet_local_dropout_rate,
                 num_layer_chunks = args.squeezenet_num_layer_chunks,
                 chunk_across_devices = args.squeezenet_chunk_across_devices,
-                layer_chunk_devices = args.squeezenet_layer_chunk_devices
-
+                layer_chunk_devices = args.squeezenet_layer_chunk_devices,
+                next_fire_groups = args.squeezenet_next_fire_groups,
+                max_pool_size = args.squeezenet_max_pool_size
                 )
         return SqueezeNet(config)
 
@@ -290,10 +338,13 @@ class SqueezeNet(serialmodule.SerializableModule):
                     skip_here=False
                 if config.mode == "wide_resfire":
                     name="wide_resfire{}".format(i+2)
-                    to_addi=WideResFire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here, local_dropout_rate=config.local_dropout_rate ))
+                    to_add=WideResFire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here, local_dropout_rate=config.local_dropout_rate ))
                 elif config.mode == "resfire":
                     name="resfire{}".format(i+2)
                     to_add=ResFire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
+                elif config.mode == "next_fire":
+                    name = "next_fire{}".format(i+2)
+                    to_add = NextFire(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand=e, skip=skip_here, groups=config.next_fire_groups )
                 else:
                     name="fire{}".format(i+2)
                     to_add=Fire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
@@ -314,7 +365,8 @@ class SqueezeNet(serialmodule.SerializableModule):
 
 
             if (i+pool_offset) % config.pool_interval == 0:
-                layer_dict["maxpool{}".format(i+2)]= nn.MaxPool2d(kernel_size=3,stride=2,padding=1)
+                logging.info("adding max pool layer")
+                layer_dict["maxpool{}".format(i+2)]= nn.MaxPool2d(kernel_size=config.max_pool_size,stride=2,padding=1)
 
         layer_dict["dropout"]=nn.Dropout(p=config.dropout_rate)
         if config.mode != "normal":
