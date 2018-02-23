@@ -20,6 +20,7 @@ import datatools.set_polarity
 import datatools.set_cifar_challenge
 import datatools.sequence_classification
 import datatools.basic_classification
+import datatools.img_tools
 from datatools.basic_classification import DataType
 import datatools.word_vectors
 import modules.maxpool_lstm
@@ -44,6 +45,7 @@ def add_args(parser):
     parser.add_argument("--reports_per_epoch", type=int,default=10)
     parser.add_argument("--save_prefix", type=str,default=None)
     parser.add_argument("--model_type", type=str, choices=["maxpool_lstm_fc", "kimcnn", "squeezenet"],default="maxpool_lstm_fc")
+    parser.add_argument("--cifar_random_erase", action="store_true")
 
     modules.kim_cnn.add_args(parser)
     modules.squeezenet.add_args(parser)
@@ -109,7 +111,10 @@ def make_context(args):
             labels=pickle.load(f)
             f.close()
             train_dataset,val_dataset = datatools.set_cifar_challenge.make_train_val_datasets(squashed_images, labels, args.validation_set_size, transform=None) 
-            train_dataset.transform = transforms.Compose([transforms.RandomCrop(size=32 ,padding= 4), transforms.RandomHorizontalFlip(), transforms.ToTensor() ])
+            tr = transforms.Compose([transforms.RandomCrop(size=32 ,padding= 4), transforms.RandomHorizontalFlip(), transforms.ToTensor() ])
+            if args.cifar_random_erase:
+                tr=transforms.Compose([tr, datatools.img_tools.RandomErase()])
+            train_dataset.transform = tr
             val_dataset.transform = transforms.ToTensor()
         elif args.mode == "test":
             f=open("../data/cifar/test_data","rb")
