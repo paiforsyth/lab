@@ -400,7 +400,7 @@ class SqueezeNet(serialmodule.SerializableModule):
                 self.channel_counts.append(ts)
                 
 
-            if not config.disable_pooling and (i+pool_offset) % config.pool_interval == 0:
+            if not config.disable_pooling and (i+pool_offset) % config.pool_interval == 0 and i !=0:
                 logging.info("adding max pool layer")
                 layer_dict["maxpool{}".format(i+2)]= nn.MaxPool2d(kernel_size=config.max_pool_size,stride=2,padding=1)
 
