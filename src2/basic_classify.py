@@ -274,6 +274,10 @@ def run(args, ensemble_test=False):
             if step % report_interval == 0:
                 monitoring.reporting.report(epoch_start_time,step,len(context.train_loader), accumulated_loss / report_interval)
                 accumulated_loss = 0
+        #added tor try to clear computation graph after every eppoch
+        del loss
+        del scores
+
         epoch_duration = time.time() - epoch_start_time
         context.tb_writer.write_data_per_second( context.train_size/epoch_duration)
         if args.param_difs:
