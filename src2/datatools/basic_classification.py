@@ -96,11 +96,11 @@ def make_ensemble_prediction_report(contexts, loader, filename):
         f.write(str(index)+","+str(prediction) + "\n")
     f.close()
 
-def make_var_wrap_collater(args):
+def make_var_wrap_collater(args,volatile=False ):
     def collater(batch_in):
        batch_in, categories, *rest=torch.utils.data.dataloader.default_collate(batch_in)
-       batch_in = Variable(batch_in)
-       categories =Variable(categories)
+       batch_in = Variable(batch_in, volatile = volatile)
+       categories =Variable(categories,volatile = volatile)
        if args.cuda:
            batch_in = batch_in.cuda()
            categories = categories.cuda()
