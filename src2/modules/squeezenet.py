@@ -457,3 +457,17 @@ class SqueezeNet(serialmodule.SerializableModule):
             layer_chunk.cuda( self.layer_chunk_devices[i] )
             logging.info("Chunk number "+ str(i)+" is on device number "+ str(next(layer_chunk.parameters()).get_device())  )
         return self
+    
+    def init_params(self):
+        '''
+        Based on the initialization done int he pytorch resnet example https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py#L112-L118
+        '''
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+            elif isinstance(m,nn.Linear):
+                m.reset_parameters()

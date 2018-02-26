@@ -26,6 +26,7 @@ import datatools.word_vectors
 import modules.maxpool_lstm
 import modules.squeezenet
 import modules.kim_cnn
+import modules.coupled_ensemble
 import monitoring.reporting
 import monitoring.tb_log
 import genutil.modules
@@ -46,6 +47,9 @@ def add_args(parser):
     parser.add_argument("--save_prefix", type=str,default=None)
     parser.add_argument("--model_type", type=str, choices=["maxpool_lstm_fc", "kimcnn", "squeezenet"],default="maxpool_lstm_fc")
     parser.add_argument("--cifar_random_erase", action="store_true")
+    parser.add_argument("--classification_loss_type",type=str, choices=["cross_entropy", "nll"], default="cross_entropy")
+    parser.add_argument("--coupled_ensemble",type=str, choices=["on", "off"], default="off")
+    parser.add_argument("--coupled_ensemble_size", type=int, default=4)
 
     modules.kim_cnn.add_args(parser)
     modules.squeezenet.add_args(parser)
@@ -159,6 +163,18 @@ def make_context(args):
 
    if args.cuda:
        model=model.cuda()
+   if args.coupled_ensemble =="on":
+        assert args.classification_loss_type == "nll"
+        model_list = []
+        for i in range(args.coupled_ensemble_size):
+            cur_model=copy.deepcopy(model)
+            cur_model.init_params()
+            model_list.append(cur_model)
+        model = modules.coupled_ensemble.CoupledEnsemble(model_list)
+        import pdb; pdb.set_trace()
+   elif args.coupled_ensemble != "off":
+        raise Exception("Unknown coupled ensemble settting")
+
 
    if args.optimizer == "sgd":
         optimizer=optim.SGD(model.parameters(),lr=args.init_lr, momentum=args.sgd_momentum, weight_decay=args.sgd_weight_decay )
@@ -262,8 +278,10 @@ def run(args, ensemble_test=False):
             #move categories to same device as scores
             if scores.is_cuda:
                 categories=categories.cuda(scores.get_device())
-
-            loss=  F.cross_entropy(scores,categories) 
+            if args.classification_loss_type == "cross_entropy":
+                loss=  F.cross_entropy(scores,categories) 
+            elif args.classification_loss_type == "nll":
+                loss= F.nll_loss(scores,categories)
             loss.backward()
             if args.grad_norm_clip is not None:
                 torch.nn.utils.clip_grad.clip_grad_norm(context.model.parameters(), args.grad_norm_clip)
