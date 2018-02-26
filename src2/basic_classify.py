@@ -50,6 +50,8 @@ def add_args(parser):
     parser.add_argument("--classification_loss_type",type=str, choices=["cross_entropy", "nll"], default="cross_entropy")
     parser.add_argument("--coupled_ensemble",type=str, choices=["on", "off"], default="off")
     parser.add_argument("--coupled_ensemble_size", type=int, default=4)
+    
+
 
     modules.kim_cnn.add_args(parser)
     modules.squeezenet.add_args(parser)
@@ -171,7 +173,6 @@ def make_context(args):
             cur_model.init_params()
             model_list.append(cur_model)
         model = modules.coupled_ensemble.CoupledEnsemble(model_list)
-        import pdb; pdb.set_trace()
    elif args.coupled_ensemble != "off":
         raise Exception("Unknown coupled ensemble settting")
 
@@ -274,6 +275,8 @@ def run(args, ensemble_test=False):
             step+=1
 
             context.optimizer.zero_grad()
+            
+            
             scores= context.model(batch_in,pad_mat) if context.data_type == DataType.SEQUENCE else context.model(batch_in)  #should have dimension batchsize
             #move categories to same device as scores
             if scores.is_cuda:
@@ -283,6 +286,8 @@ def run(args, ensemble_test=False):
             elif args.classification_loss_type == "nll":
                 loss= F.nll_loss(scores,categories)
             loss.backward()
+
+
             if args.grad_norm_clip is not None:
                 torch.nn.utils.clip_grad.clip_grad_norm(context.model.parameters(), args.grad_norm_clip)
             context.optimizer.step()
