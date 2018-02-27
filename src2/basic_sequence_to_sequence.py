@@ -8,8 +8,8 @@ def make_context(args)
         if args.save_prefix is None:
             args.save_prefix="multi30kauto"
         if args.ds_path is None:
-            args.ds_path= "../data/sentence-aligned.v2" 
-        train_dataset, val_dataset, index2vec, indexer = datatools.set_simp.load(args)
-        category_names={0:"normal",1:"simple"}
-        data_type=DataType.SEQUENCE
+            args.ds_path= "../data/multi30k/training" 
+        train_dataset, val_dataset, index2vec, indexer = datatools.set_autoencode_multi30k.load(args)
  
+def run(args):
+   context=make_context(args) 

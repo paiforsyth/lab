@@ -16,6 +16,14 @@ import genutil.modules
 import genutil.arguments
 #general rule: all used modules should be able to created just by passing args
 #todo: 
+#thought: could we fit segmentation and sequence-to-sequence in the paradigmn of classification?  To do so we would need to allow more than none "class" per data item.  This would be the world of the output sentence for sequence-to-sequence and the pixel classes for segmentation
+
+def initial_parser(parser = None):
+    if parser is None:
+        parser= argparse.ArgumentParser()
+    parser.add_argument("--paradigm", type=str, choices=["classification", "sequence_to_sequence"], default="classification")
+    return parser  
+
 def default_parser(parser=None):
     if parser is None:
         parser= argparse.ArgumentParser()
@@ -73,10 +81,13 @@ def get_args_from_files(filenames):
 
 def main():
    logging.basicConfig(level=logging.INFO)
-   parser=default_parser()
-   parser=basic_classify.add_args(parser)
-   args=parser.parse_args()
-   if args.resume_mode == "ensemble":
+   iparser = initial_parser()
+   [initial_args, remaining_vargs ] = iparser.parse_known_args()
+   if initial_args.paradigm == "classification":
+    parser=default_parser()
+    parser=basic_classify.add_args(parser)
+    args = parser.parse_args(remaining_vargs)
+    if args.resume_mode == "ensemble":
       if args.ensemble_autogen_args:
             args_list=[]
             for filename in args.ensemble_models_files:
