@@ -7,6 +7,7 @@ import torch.nn.functional as F
 import torch
 import torch.cuda
 from . import serialmodule
+from torch.autograd import Variable
 
 def add_args(parser):
     parser.add_argument("--squeezenet_in_channels",type=int, default=1)
@@ -23,7 +24,7 @@ def add_args(parser):
     parser.add_argument("--squeezenet_dropout_rate",type=float,default=0)
     parser.add_argument("--squeezenet_densenet_dropout_rate",type=float,default=0)
 
-    parser.add_argument("--fire_skip_mode", type=str, choices=["simple", "none"], default= "none")
+    parser.add_argument("--fire_skip_mode", type=str, choices=["simple", "none", "zero_pad"], default= "none")
     parser.add_argument("--squeezenet_pool_interval_mode",type=str, choices=["add","multiply"], default="add")
     parser.add_argument("--squeezenet_pool_interval",type=int, default=4)
     parser.add_argument("--squeezenet_num_fires", type=int, default=8)
@@ -46,7 +47,7 @@ def add_args(parser):
     parser.add_argument("--squeezenet_layer_chunk_devices",type=int, nargs="+")
 
 
-
+    
     
 
 
@@ -171,11 +172,13 @@ class WideResFire(serialmodule.SerializableModule):
 class FireSkipMode(Enum):
     NONE=0
     SIMPLE=1
-
+    PAD=2
 
 class ExcitationFire(serialmodule.SerializableModule):
-    def __init__(self,fire_to_wrap, in_channels, out_channels, r, skip):
+    def __init__(self,fire_to_wrap, in_channels, out_channels, r, skip, skipmode ):
         super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
         compressed_dim=max(1,math.floor( in_channels/r  ))
         self.compress=nn.Linear(in_channels, compressed_dim  )
         self.wrapped=fire_to_wrap
@@ -183,6 +186,7 @@ class ExcitationFire(serialmodule.SerializableModule):
         self.skip=skip
         if skip:
             logging.info("Creating ExcitationFire with skip layer")
+        self.skipmode = skipmode
     def forward(self, x):
         z=torch.mean(x,3)
         z=torch.mean(z,2)
@@ -194,7 +198,19 @@ class ExcitationFire(serialmodule.SerializableModule):
         z=torch.unsqueeze(z,3)
         result=z*self.wrapped(x)
         if self.skip:
-            result=result+x
+            if self.skipmode == FireSkipMode.SIMPLE:
+                result=result+x
+            elif self.skipmode == FireSkipMode.PAD:
+                if self.in_channels <self.out_channels:
+                   padding = Variable(result.data.new(result.data.shape[0],self.out_channels-self.in_channels,result.data.shape[2],result.data.shape[3]).fill_(0)) 
+                   result= result + torch.cat([x,padding],dim=1 )
+                elif self.in_channels == self.out_channels:
+                   result= result + x
+                else:
+                    raise Exception("Number of channels cannot shrink")
+            else:
+                raise Exception("Unknown FireSkipMode")
+            
         return result
 
 class DenseFire(serialmodule.SerializableModule):
@@ -284,6 +300,8 @@ class SqueezeNet(serialmodule.SerializableModule):
             skipmode = FireSkipMode.SIMPLE
         elif args.fire_skip_mode == "none":
             skipmode = FireSkipMode.NONE
+        elif args.fire_skip_mode == "zero_pad":
+            skipmode = FireSkipMode.PAD
         if args.squeezenet_dense_fire_depths=="default":
             depthlist=[6, 12, 24, 16]
         elif args.squeezenet_dense_fire_depths=="shallow":
@@ -329,7 +347,7 @@ class SqueezeNet(serialmodule.SerializableModule):
             assert config.num_layer_chunks <= torch.cuda.device_count()
             logging.info("found: "+ str(torch.cuda.device_count()) +" cuda devices." )
             self.layer_chunk_devices=config.layer_chunk_devices
-        assert(config.skipmode == FireSkipMode.NONE or config.skipmode == FireSkipMode.SIMPLE)
+        assert(config.skipmode == FireSkipMode.NONE or config.skipmode == FireSkipMode.SIMPLE or config.skipmode == FireSkipMode.PAD)
         if config.mode == "densefire":
             logging.info("Making a dense squeezenet.")
             assert config.num_fires == len(config.dense_fire_depth_list)
@@ -355,7 +373,7 @@ class SqueezeNet(serialmodule.SerializableModule):
         for i in range(num_fires):
             if  config.mode != "dense_fire" and config.mode != "dense_fire_v2":
                 if config.pool_interval_mode == "add":
-                    e=config.base+config.incr*math.floor(i/config.freq)
+                    e = config.base+math.floor(config.incr*math.floor(i/config.freq))
                 elif config.pool_interval_mode == "multiply":
                     e=config.base* (config.multiplicative_incr ** math.floor(i/config.freq)) 
                 num_squeeze=max(math.floor(config.sr*e),1)
@@ -364,6 +382,12 @@ class SqueezeNet(serialmodule.SerializableModule):
                 if config.skipmode == FireSkipMode.SIMPLE and e == self.channel_counts[i]:
                     skip_here=True
                     logging.info("Making simple skip layer.")
+                elif config.skipmode == FireSkipMode.PAD:
+                    skip_here=True
+                    if e == self.channel_counts[i]:
+                        logging.info("Padding is enabled, but channel count has not changed.  Simple skipping will occur")
+                    else:
+                        logging.info("Making Padding skip layer")
                 else:
                     skip_here=False
                 if config.mode == "wide_resfire":
@@ -381,7 +405,7 @@ class SqueezeNet(serialmodule.SerializableModule):
 
                 if config.use_excitation:
                     to_add.skip=False 
-                    to_add=ExcitationFire(to_add, in_channels=self.channel_counts[i], out_channels=e, r=config.excitation_r, skip=skip_here)
+                    to_add=ExcitationFire(to_add, in_channels=self.channel_counts[i], out_channels=e, r=config.excitation_r, skip=skip_here, skipmode=config.skipmode)
                     name="ExcitationFire{}".format(i+2)
                 layer_dict[name]=to_add
 

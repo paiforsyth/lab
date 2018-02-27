@@ -30,6 +30,8 @@ def default_parser(parser=None):
     parser.add_argument("--cuda", action="store_true")
     parser.add_argument("--num_epochs",type=int,default=4)
     parser.add_argument("--validation_set_size",type=int,default=1000)
+    parser.add_argument("--holdout", action="store_true")
+    parser.add_argument("--holdout_size", type=int, default=500)
     parser.add_argument("--model_save_path",type=str, default= "../saved_models/") 
     parser.add_argument("--resume_mode", type=str, choices=["none", "standard", "ensemble"], default= "none" )
     parser.add_argument("--res_file",type=str, default="recent_model") 

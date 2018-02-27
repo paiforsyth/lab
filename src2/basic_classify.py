@@ -58,13 +58,13 @@ def add_args(parser):
     
     return parser
 
-#Context=collections.namedtuple("Context","model, train_loader, val_loader, optimizer, indexer, category_names, tb_writer, train_size, data_type, scheduler, test_loader")
 
 class Context:
-    def __init__(self, model, train_loader, val_loader, optimizer,indexer, category_names, tb_writer, train_size, data_type, scheduler, test_loader,cuda):
+    def __init__(self, model, train_loader, val_loader, optimizer,indexer, category_names, tb_writer, train_size, data_type, scheduler, test_loader,cuda, holdout_loader):
         self.model=model
         self.train_loader=train_loader
         self.val_loader=val_loader
+        self.holdout_loader= holdout_loader
         self.optimizer=optimizer
         self.categpry_names=category_names
         self.tb_writer=tb_writer
@@ -88,6 +88,8 @@ class Context:
 
 
 def make_context(args):
+   holdout_loader =None
+
    if args.dataset_for_classification == "simple":
         if args.save_prefix is None:
             args.save_prefix="simplification_classification"
@@ -111,6 +113,7 @@ def make_context(args):
         data_type = DataType.IMAGE 
         test_dataset=val_dataset #for testing
    elif args.dataset_for_classification == "cifar_challenge":
+        data_type = DataType.IMAGE
         if args.mode == "train":
             f=open("../data/cifar/train_data","rb")
             squashed_images=pickle.load(f)
@@ -120,15 +123,23 @@ def make_context(args):
             tr = transforms.Compose([transforms.RandomCrop(size=32 ,padding= 4), transforms.RandomHorizontalFlip(), transforms.ToTensor() ])
             if args.cifar_random_erase:
                 tr=transforms.Compose([tr, datatools.img_tools.RandomErase()])
+            if args.holdout:
+                holdout_dataset, val_dataset = val_dataset.split(args.holdout_size)
             train_dataset.transform = tr
             val_dataset.transform = transforms.ToTensor()
         elif args.mode == "test":
             f=open("../data/cifar/test_data","rb")
             squashed_images=pickle.load(f)
             test_dataset= datatools.set_cifar_challenge.Dataset(data=squashed_images, labels=[-1]*squashed_images.shape[0], transform=transforms.ToTensor())
-            data_type = DataType.IMAGE
             f.close()
-        data_type = DataType.IMAGE
+            if args.holdout:
+                f=open("../data/cifar/train_data","rb")
+                squashed_images=pickle.load(f)
+                labels=pickle.load(f)
+                f.close()
+                _,val_dataset = datatools.set_cifar_challenge.make_train_val_datasets(squashed_images, labels, args.validation_set_size, transform=None) 
+                holdout_dataset, val_dataset = val_dataset.split(args.holdout_size)
+
         category_names= { k:v for k,v in enumerate(datatools.set_cifar_challenge.CIFAR100_LABELS_LIST)}
 
    else:
@@ -150,6 +161,8 @@ def make_context(args):
        elif  args.mode == "test":
             test_loader=data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle= False, collate_fn=datatools.basic_classification.make_var_wrap_collater(args,volatile=True))
             assert(args.resume_mode == "standard" or args.resume_mode == "ensemble")
+            if args.holdout:
+                    holdout_loader=data.DataLoader(holdout_dataset, batch_size=args.batch_size, shuffle= False, collate_fn=datatools.basic_classification.make_var_wrap_collater(args,volatile=True))
    else:
        raise Exception("Unknown data type.")
         
@@ -212,7 +225,7 @@ def make_context(args):
        train_size= None
        train_loader = None
        val_loader = None
-   return Context(model, train_loader, val_loader, optimizer, indexer, category_names=category_names, tb_writer=monitoring.tb_log.TBWriter("{}_"+args.save_prefix), train_size=train_size, data_type=data_type, scheduler=scheduler, test_loader=test_loader, cuda=args.cuda)
+   return Context(model, train_loader, val_loader, optimizer, indexer, category_names=category_names, tb_writer=monitoring.tb_log.TBWriter("{}_"+args.save_prefix), train_size=train_size, data_type=data_type, scheduler=scheduler, test_loader=test_loader, cuda=args.cuda, holdout_loader= holdout_loader)
 
 
 
@@ -276,8 +289,13 @@ def run(args, ensemble_test=False):
 
             context.optimizer.zero_grad()
             
-            
+            #for image classification, batch_in will have dimension batchsize by imagesize and scores will have dimension batchsize by number of categories
+            #For sequence-to-squence batch in will have dimension batchsize by the max sequence length in the batch. scores  will have dimension batchsize by max sqeunce_length by categoreis
+
             scores= context.model(batch_in,pad_mat) if context.data_type == DataType.SEQUENCE else context.model(batch_in)  #should have dimension batchsize
+
+
+
             #move categories to same device as scores
             if scores.is_cuda:
                 categories=categories.cuda(scores.get_device())
