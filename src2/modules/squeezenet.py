@@ -368,7 +368,7 @@ class SqueezeNet(serialmodule.SerializableModule):
             ("conv1relu", nn.LeakyReLU()),
             ("maxpool1", nn.MaxPool2d(kernel_size=3,stride=2,padding=1))
             ]) 
-
+        num_pool_so_far =0 #for debugging
         self.channel_counts=[ first_layer_num_convs]#initial number of channels entering ith fire layer (labeled i+2 to match paper)
         for i in range(num_fires):
             if  config.mode != "dense_fire" and config.mode != "dense_fire_v2":
@@ -427,7 +427,8 @@ class SqueezeNet(serialmodule.SerializableModule):
             if not config.disable_pooling and (i+pool_offset) % config.pool_interval == 0 and i !=0:
                 logging.info("adding max pool layer")
                 layer_dict["maxpool{}".format(i+2)]= nn.MaxPool2d(kernel_size=config.max_pool_size,stride=2,padding=1)
-
+                num_pool_so_far+=1
+        logging.info("counted " +str(num_pool_so_far)+" pooling layers" )
         layer_dict["dropout"]=nn.Dropout(p=config.dropout_rate)
         if config.mode != "normal":
             layer_dict["final_convrelu"]=nn.LeakyReLU()
