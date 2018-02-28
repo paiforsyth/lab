@@ -1,6 +1,7 @@
 import math
 import collections
 import logging
+import random
 from enum import Enum
 import torch.nn as nn
 import torch.nn.functional as F
@@ -46,9 +47,9 @@ def add_args(parser):
     parser.add_argument("--squeezenet_chunk_across_devices", action="store_true")
     parser.add_argument("--squeezenet_layer_chunk_devices",type=int, nargs="+")
 
-
     
-    
+    parser.add_argument("--squeezenet_next_fire_final_bn", action="store_true")    
+    parser.add_argument("--squeezenet_next_fire_stochastic_depth", action="store_true")
 
 
 FireConfig=collections.namedtuple("FireConfig","in_channels,num_squeeze, num_expand1, num_expand3, skip")
@@ -112,7 +113,7 @@ class ResFire(serialmodule.SerializableModule):
 
 class NextFire(serialmodule.SerializableModule):
 
-    def __init__(self, in_channels, num_squeeze, num_expand,skip, groups=32 ):
+    def __init__(self, in_channels, num_squeeze, num_expand,skip,skipmode, groups=32, final_bn=False,stochastic_depth=False, survival_prob=1):
         super().__init__()
         layer_dict = collections.OrderedDict()
         layer_dict["bn1"] = nn.BatchNorm2d(in_channels)
@@ -124,12 +125,50 @@ class NextFire(serialmodule.SerializableModule):
         layer_dict["bn3"] = nn.BatchNorm2d(num_squeeze)
         layer_dict["leaky_relu3"] = nn.LeakyReLU(inplace=True)
         layer_dict["expand_conv"] =  nn.Conv2d(num_squeeze, num_expand, kernel_size=1)
+        if final_bn:
+            logging.info("Making NextFire layer with a final batchnorm")
+            layer_dict["final_bn"]=nn.BatchNorm2d(num_expand)
         self.seq= nn.Sequential(layer_dict)
-        self.ski=skip
+        self.skip=skip
+        self.skipmode=skipmode
+        self.in_channels=in_channels
+        self.out_channels=num_expand
+        self.stochastic_depth=stochastic_depth
+        self.survival_prob=survival_prob
+        if self.stochastic_depth:
+            logging.info("Making NextFire layer with stochastic depth")
+            assert self.skip
+
     def forward(self, x):
         out= self.seq(x)
+        if self.stochastic_depth:
+            multiplier = Variable(out.data.new(1,out.data.shape[1],1,1).fill_(1))
+            if self.training:
+                killtop = random.uniform(0,1)>self.survival_prob
+                killbottom = random.uniform(0,1)>self.survival_prob
+                if killtop:
+                    multiplier[:,:(self.out_channels-self.in_channels),:,:]=0
+                if killbottom:
+                    multiplier[:,(self.out_channels - self.in_channels):,:,:]=0
+            else:
+                multiplier = multiplier * self.survival_prob
+            out=out*multiplier    
+
         if self.skip:
-            out = out + x
+            if self.skipmode == FireSkipMode.SIMPLE:
+                out = out + x
+            elif self.skipmode == FireSkipMode.PAD:
+                if self.in_channels <self.out_channels:
+                   padding = Variable(out.data.new(out.data.shape[0],self.out_channels-self.in_channels,out.data.shape[2],out.data.shape[3]).fill_(0)) 
+                   out = out + torch.cat([x,padding],dim=1 )
+                elif self.in_channels == self.out_channels:
+                   out = out + x
+                else:
+                    raise Exception("Number of channels cannot shrink")
+            else:
+                raise Exception("Unknown FireSkipMode")
+
+
         return out
 
 class WideResFire(serialmodule.SerializableModule):
@@ -280,7 +319,7 @@ class DenseFireV2Transition(serialmodule.SerializableModule):
         return self.seq(x)
 
 
-SqueezeNetConfig=collections.namedtuple("SqueezeNetConfig","in_channels, base, incr, prop3, freq, sr, out_dim, skipmode,  dropout_rate, num_fires, pool_interval, conv1_stride, conv1_size, pooling_count_offset, num_conv1_filters,  dense_fire_k,  dense_fire_depth_list, dense_fire_compression_level, mode, use_excitation, excitation_r, pool_interval_mode, multiplicative_incr, local_dropout_rate, num_layer_chunks, chunk_across_devices, layer_chunk_devices, next_fire_groups, max_pool_size,densenet_dropout_rate, disable_pooling")
+SqueezeNetConfig=collections.namedtuple("SqueezeNetConfig","in_channels, base, incr, prop3, freq, sr, out_dim, skipmode,  dropout_rate, num_fires, pool_interval, conv1_stride, conv1_size, pooling_count_offset, num_conv1_filters,  dense_fire_k,  dense_fire_depth_list, dense_fire_compression_level, mode, use_excitation, excitation_r, pool_interval_mode, multiplicative_incr, local_dropout_rate, num_layer_chunks, chunk_across_devices, layer_chunk_devices, next_fire_groups, max_pool_size,densenet_dropout_rate, disable_pooling, next_fire_final_bn, next_fire_stochastic_depth")
 class SqueezeNet(serialmodule.SerializableModule):
     '''
         Used ideas from
@@ -335,7 +374,9 @@ class SqueezeNet(serialmodule.SerializableModule):
                 next_fire_groups = args.squeezenet_next_fire_groups,
                 max_pool_size = args.squeezenet_max_pool_size,
                 densenet_dropout_rate = args.squeezenet_densenet_dropout_rate,
-                disable_pooling = args.squeezenet_disable_pooling
+                disable_pooling = args.squeezenet_disable_pooling,
+                next_fire_final_bn = args.squeezenet_next_fire_final_bn,
+                next_fire_stochastic_depth = args.squeezenet_next_fire_stochastic_depth
                 )
         return SqueezeNet(config)
 
@@ -398,7 +439,8 @@ class SqueezeNet(serialmodule.SerializableModule):
                     to_add=ResFire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
                 elif config.mode == "next_fire":
                     name = "next_fire{}".format(i+2)
-                    to_add = NextFire(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand=e, skip=skip_here, groups=config.next_fire_groups )
+                    survival_prob = 1-0.5*i/num_fires 
+                    to_add = NextFire(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand=e, skip=skip_here, groups=config.next_fire_groups, skipmode=config.skipmode, final_bn=config.next_fire_final_bn, stochastic_depth=config.next_fire_stochastic_depth, survival_prob = survival_prob )
                 else:
                     name="fire{}".format(i+2)
                     to_add=Fire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
