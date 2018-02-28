@@ -2,6 +2,7 @@ import math
 import collections
 import logging
 import random
+import copy
 from enum import Enum
 import torch.nn as nn
 import torch.nn.functional as F
@@ -9,6 +10,7 @@ import torch
 import torch.cuda
 from . import serialmodule
 from . import shakedrop_func 
+from . import shake_shake
 from torch.autograd import Variable
 
 
@@ -55,6 +57,12 @@ def add_args(parser):
     parser.add_argument("--squeezenet_next_fire_final_bn", action="store_true")    
     parser.add_argument("--squeezenet_next_fire_stochastic_depth", action="store_true")
     parser.add_argument("--squeezenet_next_fire_shakedrop", action="store_true")
+
+    parser.add_argument("--squeezenet_final_fc", action="store_true")
+    parser.add_argument("--squeezenet_final_size", type=int, default=8)
+    
+    parser.add_argument("--squeezenet_next_fire_shake_shake", action= "store_true" )
+    parser.add_argument("--squeezenet_excitation_shake_shake", action="store_true")
 
 
 
@@ -119,7 +127,7 @@ class ResFire(serialmodule.SerializableModule):
 
 class NextFire(serialmodule.SerializableModule):
 
-    def __init__(self, in_channels, num_squeeze, num_expand,skip,skipmode, groups=32, final_bn=False,stochastic_depth=False, survival_prob=1, shakedrop=True):
+    def __init__(self, in_channels, num_squeeze, num_expand,skip,skipmode, groups=32, final_bn=False,stochastic_depth=False, survival_prob=1, shakedrop=False, shake_shake=False, shake_shake_mode= shake_shake.ShakeMode.IMAGE):
         super().__init__()
         layer_dict = collections.OrderedDict()
         layer_dict["bn1"] = nn.BatchNorm2d(in_channels)
@@ -142,12 +150,19 @@ class NextFire(serialmodule.SerializableModule):
         self.stochastic_depth=stochastic_depth
         self.survival_prob=survival_prob
         self.shakedrop=shakedrop
+        self.shake_shake=shake_shake
         if self.stochastic_depth:
             logging.info("Making NextFire layer with stochastic depth")
             assert self.skip
             assert not self.shakedrop
         if self.shakedrop:
             logging.info("Making NextFire Layer with Shakedrop")
+        if self.shake_shake:
+            assert not self.shakedrop
+            logging.info("Making a NextFire with Shake Shake")
+            self.shake_shake_mode=shake_shake_mode
+            self.seq2=copy.deepcopy(self.seq)
+            init_p(self.seq2)
 
     def forward(self, x):
         out= self.seq(x)
@@ -165,6 +180,10 @@ class NextFire(serialmodule.SerializableModule):
             out=out*multiplier    
         if self.shakedrop:
             out=shakedrop_func.ShakeDrop.apply(out, -1, 1,0, 1, self.survival_prob  )
+        if self.shake_shake:
+           out2=self.seq2(x)
+           alpha, beta= shake_shake.generate_alpha_beta(x,self.shake_shake_mode, self.training)
+           out=shake_shake.ShakeFunc.apply(out,out2,alpha,beta) 
 
         if self.skip:
             if self.skipmode == FireSkipMode.SIMPLE:
@@ -226,7 +245,7 @@ class FireSkipMode(Enum):
     PAD=2
 
 class ExcitationFire(serialmodule.SerializableModule):
-    def __init__(self,fire_to_wrap, in_channels, out_channels, r, skip, skipmode ):
+    def __init__(self,fire_to_wrap, in_channels, out_channels, r, skip, skipmode, shake_shake=False ):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -235,8 +254,15 @@ class ExcitationFire(serialmodule.SerializableModule):
         self.wrapped=fire_to_wrap
         self.expand=nn.Linear(compressed_dim, out_channels)
         self.skip=skip
+        self.shake_shake=shake_shake
         if skip:
             logging.info("Creating ExcitationFire with skip layer")
+        if shake_shake:
+            logging.info("Creating excitationfire with shake0shake")
+            self.compress2=copy.deepcopy(self.compress)
+            self.wrapped2=copy.deepcopy(self.wrapped)
+            self.expand2=copy.deepcopy(self.expand)
+            init_p(self)
         self.skipmode = skipmode
     def forward(self, x):
         z=torch.mean(x,3)
@@ -331,7 +357,7 @@ class DenseFireV2Transition(serialmodule.SerializableModule):
         return self.seq(x)
 
 
-SqueezeNetConfig=collections.namedtuple("SqueezeNetConfig","in_channels, base, incr, prop3, freq, sr, out_dim, skipmode,  dropout_rate, num_fires, pool_interval, conv1_stride, conv1_size, pooling_count_offset, num_conv1_filters,  dense_fire_k,  dense_fire_depth_list, dense_fire_compression_level, mode, use_excitation, excitation_r, pool_interval_mode, multiplicative_incr, local_dropout_rate, num_layer_chunks, chunk_across_devices, layer_chunk_devices, next_fire_groups, max_pool_size,densenet_dropout_rate, disable_pooling, next_fire_final_bn, next_fire_stochastic_depth, use_non_default_layer_splits, layer_splits, next_fire_shakedrop")
+SqueezeNetConfig=collections.namedtuple("SqueezeNetConfig","in_channels, base, incr, prop3, freq, sr, out_dim, skipmode,  dropout_rate, num_fires, pool_interval, conv1_stride, conv1_size, pooling_count_offset, num_conv1_filters,  dense_fire_k,  dense_fire_depth_list, dense_fire_compression_level, mode, use_excitation, excitation_r, pool_interval_mode, multiplicative_incr, local_dropout_rate, num_layer_chunks, chunk_across_devices, layer_chunk_devices, next_fire_groups, max_pool_size,densenet_dropout_rate, disable_pooling, next_fire_final_bn, next_fire_stochastic_depth, use_non_default_layer_splits, layer_splits, next_fire_shakedrop, final_fc, final_size, next_fire_shake_shake,excitation_shake_shake")
 class SqueezeNet(serialmodule.SerializableModule):
     '''
         Used ideas from
@@ -391,7 +417,11 @@ class SqueezeNet(serialmodule.SerializableModule):
                 next_fire_stochastic_depth = args.squeezenet_next_fire_stochastic_depth,
                 use_non_default_layer_splits = args.squeezenet_use_non_default_layer_splits,
                 layer_splits= args.squeezenet_layer_splits,
-                next_fire_shakedrop=args.squeezenet_next_fire_shakedrop
+                next_fire_shakedrop=args.squeezenet_next_fire_shakedrop,
+                final_fc=args.squeezenet_final_fc,
+                final_size=args.squeezenet_final_size,
+                next_fire_shake_shake=args.squeezenet_next_fire_shake_shake,
+                excitation_shake_shake=args.squeezenet_excitation_shake_shake
                 )
         return SqueezeNet(config)
 
@@ -455,14 +485,14 @@ class SqueezeNet(serialmodule.SerializableModule):
                 elif config.mode == "next_fire":
                     name = "next_fire{}".format(i+2)
                     survival_prob = 1-0.5*i/num_fires 
-                    to_add = NextFire(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand=e, skip=skip_here, groups=config.next_fire_groups, skipmode=config.skipmode, final_bn=config.next_fire_final_bn, stochastic_depth=config.next_fire_stochastic_depth, survival_prob = survival_prob, shakedrop=config.next_fire_shakedrop )
+                    to_add = NextFire(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand=e, skip=skip_here, groups=config.next_fire_groups, skipmode=config.skipmode, final_bn=config.next_fire_final_bn, stochastic_depth=config.next_fire_stochastic_depth, survival_prob = survival_prob, shakedrop=config.next_fire_shakedrop, shake_shake= config.next_fire_shake_shake )
                 else:
                     name="fire{}".format(i+2)
                     to_add=Fire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
 
                 if config.use_excitation:
                     to_add.skip=False 
-                    to_add=ExcitationFire(to_add, in_channels=self.channel_counts[i], out_channels=e, r=config.excitation_r, skip=skip_here, skipmode=config.skipmode)
+                    to_add=ExcitationFire(to_add, in_channels=self.channel_counts[i], out_channels=e, r=config.excitation_r, skip=skip_here, skipmode=config.skipmode, shake_shake=config.excitation_shake_shake)
                     name="ExcitationFire{}".format(i+2)
                 layer_dict[name]=to_add
 
@@ -487,12 +517,16 @@ class SqueezeNet(serialmodule.SerializableModule):
                 num_pool_so_far+=1
         logging.info("counted " +str(num_pool_so_far)+" pooling layers" )
         layer_dict["dropout"]=nn.Dropout(p=config.dropout_rate)
-        if config.mode != "normal":
-            layer_dict["final_convrelu"]=nn.LeakyReLU()
-            layer_dict["final_conv"]=nn.Conv2d(self.channel_counts[-1], config.out_dim, kernel_size=1) 
-        else: 
-            layer_dict["final_conv"]=nn.Conv2d(self.channel_counts[-1], config.out_dim, kernel_size=1) 
-            layer_dict["final_convrelu"]=nn.LeakyReLU()
+        self.final_fc=config.final_fc
+        if not self.final_fc:
+            if config.mode != "normal":
+                layer_dict["final_convrelu"]=nn.LeakyReLU()
+                layer_dict["final_conv"]=nn.Conv2d(self.channel_counts[-1], config.out_dim, kernel_size=1) 
+            else: 
+                layer_dict["final_conv"]=nn.Conv2d(self.channel_counts[-1], config.out_dim, kernel_size=1) 
+                layer_dict["final_convrelu"]=nn.LeakyReLU()
+        else:
+            self.final_fc_weights=nn.Linear(self.channel_counts[-1], config.out_dim)
         
 
         self.layer_chunk_list=[]
@@ -535,6 +569,8 @@ class SqueezeNet(serialmodule.SerializableModule):
 
         x=torch.mean(x,dim=3)
         x=torch.mean(x,dim=2)
+        if self.final_fc:
+            x=F.leaky_relu(self.final_fc_weights(x))
         return x
 
 
@@ -545,18 +581,23 @@ class SqueezeNet(serialmodule.SerializableModule):
         for i,layer_chunk in enumerate(self.layer_chunk_list):
             layer_chunk.cuda( self.layer_chunk_devices[i] )
             logging.info("Chunk number "+ str(i)+" is on device number "+ str(next(layer_chunk.parameters()).get_device())  )
+        if self.final_fc:
+            self.final_fc_weights.cuda(self.layer_chunk_devices[-1])
         return self
     
+
     def init_params(self):
+        init_p(self)
+
+
+def init_p(mod):
         '''
         Based on the initialization done int he pytorch resnet example https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py#L112-L118
         '''
-        for m in self.modules():
+        for m in mod.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
                 m.weight.data.normal_(0, math.sqrt(2. / n))
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
-            elif isinstance(m, ExcitationFire):
-                pass
