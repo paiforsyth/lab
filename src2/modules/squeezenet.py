@@ -8,7 +8,9 @@ import torch.nn.functional as F
 import torch
 import torch.cuda
 from . import serialmodule
+from . import shakedrop_func 
 from torch.autograd import Variable
+
 
 def add_args(parser):
     parser.add_argument("--squeezenet_in_channels",type=int, default=1)
@@ -46,10 +48,14 @@ def add_args(parser):
     parser.add_argument("--squeezenet_num_layer_chunks", type=int, default=1) 
     parser.add_argument("--squeezenet_chunk_across_devices", action="store_true")
     parser.add_argument("--squeezenet_layer_chunk_devices",type=int, nargs="+")
+    parser.add_argument("--squeezenet_use_non_default_layer_splits",action="store_true")
+    parser.add_argument("--squeezenet_layer_splits",type=int, nargs="*")
 
     
     parser.add_argument("--squeezenet_next_fire_final_bn", action="store_true")    
     parser.add_argument("--squeezenet_next_fire_stochastic_depth", action="store_true")
+    parser.add_argument("--squeezenet_next_fire_shakedrop", action="store_true")
+
 
 
 FireConfig=collections.namedtuple("FireConfig","in_channels,num_squeeze, num_expand1, num_expand3, skip")
@@ -113,7 +119,7 @@ class ResFire(serialmodule.SerializableModule):
 
 class NextFire(serialmodule.SerializableModule):
 
-    def __init__(self, in_channels, num_squeeze, num_expand,skip,skipmode, groups=32, final_bn=False,stochastic_depth=False, survival_prob=1):
+    def __init__(self, in_channels, num_squeeze, num_expand,skip,skipmode, groups=32, final_bn=False,stochastic_depth=False, survival_prob=1, shakedrop=True):
         super().__init__()
         layer_dict = collections.OrderedDict()
         layer_dict["bn1"] = nn.BatchNorm2d(in_channels)
@@ -135,9 +141,13 @@ class NextFire(serialmodule.SerializableModule):
         self.out_channels=num_expand
         self.stochastic_depth=stochastic_depth
         self.survival_prob=survival_prob
+        self.shakedrop=shakedrop
         if self.stochastic_depth:
             logging.info("Making NextFire layer with stochastic depth")
             assert self.skip
+            assert not self.shakedrop
+        if self.shakedrop:
+            logging.info("Making NextFire Layer with Shakedrop")
 
     def forward(self, x):
         out= self.seq(x)
@@ -153,6 +163,8 @@ class NextFire(serialmodule.SerializableModule):
             else:
                 multiplier = multiplier * self.survival_prob
             out=out*multiplier    
+        if self.shakedrop:
+            out=shakedrop_func.ShakeDrop.apply(out, -1, 1,0, 1, self.survival_prob  )
 
         if self.skip:
             if self.skipmode == FireSkipMode.SIMPLE:
@@ -319,7 +331,7 @@ class DenseFireV2Transition(serialmodule.SerializableModule):
         return self.seq(x)
 
 
-SqueezeNetConfig=collections.namedtuple("SqueezeNetConfig","in_channels, base, incr, prop3, freq, sr, out_dim, skipmode,  dropout_rate, num_fires, pool_interval, conv1_stride, conv1_size, pooling_count_offset, num_conv1_filters,  dense_fire_k,  dense_fire_depth_list, dense_fire_compression_level, mode, use_excitation, excitation_r, pool_interval_mode, multiplicative_incr, local_dropout_rate, num_layer_chunks, chunk_across_devices, layer_chunk_devices, next_fire_groups, max_pool_size,densenet_dropout_rate, disable_pooling, next_fire_final_bn, next_fire_stochastic_depth")
+SqueezeNetConfig=collections.namedtuple("SqueezeNetConfig","in_channels, base, incr, prop3, freq, sr, out_dim, skipmode,  dropout_rate, num_fires, pool_interval, conv1_stride, conv1_size, pooling_count_offset, num_conv1_filters,  dense_fire_k,  dense_fire_depth_list, dense_fire_compression_level, mode, use_excitation, excitation_r, pool_interval_mode, multiplicative_incr, local_dropout_rate, num_layer_chunks, chunk_across_devices, layer_chunk_devices, next_fire_groups, max_pool_size,densenet_dropout_rate, disable_pooling, next_fire_final_bn, next_fire_stochastic_depth, use_non_default_layer_splits, layer_splits, next_fire_shakedrop")
 class SqueezeNet(serialmodule.SerializableModule):
     '''
         Used ideas from
@@ -376,7 +388,10 @@ class SqueezeNet(serialmodule.SerializableModule):
                 densenet_dropout_rate = args.squeezenet_densenet_dropout_rate,
                 disable_pooling = args.squeezenet_disable_pooling,
                 next_fire_final_bn = args.squeezenet_next_fire_final_bn,
-                next_fire_stochastic_depth = args.squeezenet_next_fire_stochastic_depth
+                next_fire_stochastic_depth = args.squeezenet_next_fire_stochastic_depth,
+                use_non_default_layer_splits = args.squeezenet_use_non_default_layer_splits,
+                layer_splits= args.squeezenet_layer_splits,
+                next_fire_shakedrop=args.squeezenet_next_fire_shakedrop
                 )
         return SqueezeNet(config)
 
@@ -440,7 +455,7 @@ class SqueezeNet(serialmodule.SerializableModule):
                 elif config.mode == "next_fire":
                     name = "next_fire{}".format(i+2)
                     survival_prob = 1-0.5*i/num_fires 
-                    to_add = NextFire(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand=e, skip=skip_here, groups=config.next_fire_groups, skipmode=config.skipmode, final_bn=config.next_fire_final_bn, stochastic_depth=config.next_fire_stochastic_depth, survival_prob = survival_prob )
+                    to_add = NextFire(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand=e, skip=skip_here, groups=config.next_fire_groups, skipmode=config.skipmode, final_bn=config.next_fire_final_bn, stochastic_depth=config.next_fire_stochastic_depth, survival_prob = survival_prob, shakedrop=config.next_fire_shakedrop )
                 else:
                     name="fire{}".format(i+2)
                     to_add=Fire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
@@ -480,14 +495,21 @@ class SqueezeNet(serialmodule.SerializableModule):
             layer_dict["final_convrelu"]=nn.LeakyReLU()
         
 
-        chunk_size = len(layer_dict.items()) // config.num_layer_chunks
         self.layer_chunk_list=[]
-        
+        if config.use_non_default_layer_splits:
+            layer_splits=config.layer_splits
+        else:
+            chunk_size = len(layer_dict.items()) // config.num_layer_chunks
+            layer_splits=[]
+            for i in range(config.num_layer_chunks):
+                layer_splits.append(i*chunk_size)
+            
         for i in range( config.num_layer_chunks -1 ):
-            layer_chunk=nn.Sequential( collections.OrderedDict(list(layer_dict.items())[i*chunk_size:(i+1)*chunk_size]) )
+            layer_chunk=nn.Sequential( collections.OrderedDict(list(layer_dict.items())[layer_splits[i]:layer_splits[i+1] ]) )
             self.add_module("layer_chunk_"+str(i),layer_chunk )
             self.layer_chunk_list.append(layer_chunk)
-        layer_chunk=nn.Sequential( collections.OrderedDict(list(layer_dict.items())[ (config.num_layer_chunks-1)*chunk_size:]) )
+        #add last chunk
+        layer_chunk=nn.Sequential( collections.OrderedDict(list(layer_dict.items())[ layer_splits[config.num_layer_chunks-1]:]) )
         self.add_module("layer_chunk_"+str(config.num_layer_chunks-1),layer_chunk )
         self.layer_chunk_list.append(layer_chunk)
          
