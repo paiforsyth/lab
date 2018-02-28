@@ -536,5 +536,5 @@ class SqueezeNet(serialmodule.SerializableModule):
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
-            elif isinstance(m,nn.Linear):
-                m.reset_parameters()
+            elif isinstance(m, ExcitationFire):
+                pass
