@@ -58,7 +58,7 @@ def add_args(parser):
     parser.add_argument("--squeezenet_next_fire_stochastic_depth", action="store_true")
     parser.add_argument("--squeezenet_next_fire_shakedrop", action="store_true")
 
-    parser.add_argument("--squeezenet_final_fc", action="store_true") temporarily removed.  seems bugged
+    parser.add_argument("--squeezenet_final_fc", action="store_true")# temporarily removed.  seems bugged
     parser.add_argument("--squeezenet_final_size", type=int, default=8)
     
     parser.add_argument("--squeezenet_next_fire_shake_shake", action= "store_true" )
