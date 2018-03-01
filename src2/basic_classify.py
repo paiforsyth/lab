@@ -50,6 +50,8 @@ def add_args(parser):
     parser.add_argument("--classification_loss_type",type=str, choices=["cross_entropy", "nll"], default="cross_entropy")
     parser.add_argument("--coupled_ensemble",type=str, choices=["on", "off"], default="off")
     parser.add_argument("--coupled_ensemble_size", type=int, default=4)
+
+    parser.add_argument("--cifar_shuffle_val_set",action="store_true")
     
 
 
@@ -93,6 +95,7 @@ def make_context(args):
    if args.dataset_for_classification == "simple":
         if args.save_prefix is None:
             args.save_prefix="simplification_classification"
+        logging.info("using save prefix "+str(args.save_prefix))
         if args.ds_path is None:
             args.ds_path= "../data/sentence-aligned.v2" 
         train_dataset, val_dataset, index2vec, indexer = datatools.set_simp.load(args)
@@ -119,7 +122,7 @@ def make_context(args):
             squashed_images=pickle.load(f)
             labels=pickle.load(f)
             f.close()
-            train_dataset,val_dataset = datatools.set_cifar_challenge.make_train_val_datasets(squashed_images, labels, args.validation_set_size, transform=None) 
+            train_dataset,val_dataset = datatools.set_cifar_challenge.make_train_val_datasets(squashed_images, labels, args.validation_set_size, transform=None, shuf=args.cifar_shuffle_val_set) 
             tr = transforms.Compose([transforms.RandomCrop(size=32 ,padding= 4), transforms.RandomHorizontalFlip(), transforms.ToTensor() ])
             if args.cifar_random_erase:
                 tr=transforms.Compose([tr, datatools.img_tools.RandomErase()])

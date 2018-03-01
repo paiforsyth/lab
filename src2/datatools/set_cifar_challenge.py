@@ -21,8 +21,15 @@ class Dataset(data.Dataset):
     def split(self, index):
         return Dataset(self.data[:index,:], self.labels[:index], self.transform), Dataset(self.data[index:,:], self.labels[index:], self.transform )
 
-def make_train_val_datasets(data,labels,index, transform):
+    def shuffle(self):
+        p=np.random.permutation(len(self.data))
+        self.data = self.data[p]
+        self.labels = np.asarray(self.labels)[p].tolist()
+
+def make_train_val_datasets(data,labels,index, transform, shuf=False):
     combined=Dataset(data,labels,transform)
+    if shuf:
+        combined.shuffle()
     val, train= combined.split(index)
     return train, val
 
