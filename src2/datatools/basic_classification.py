@@ -49,6 +49,8 @@ def predict(context, loader):
 def ensemble_predict(contexts, loader):
    '''
    Note: models are expected to be stashed
+   args:
+    
    '''
    overall_predictions=[]
    logging.info("Predicting.")
@@ -64,7 +66,7 @@ def ensemble_predict(contexts, loader):
                 pad_mat = other[1]
 
             scores= context.model(batch,pad_mat) if context.data_type == DataType.SEQUENCE else context.model(batch)  #should have dimension batchsize by number of categories
-            scores=F.softmax(scores,dim=1)
+            scores=F.log_softmax(scores,dim=1)
             scores=scores.unsqueeze(2)
             score_list_2d[i].append(scores.data)
        context.model.train()
