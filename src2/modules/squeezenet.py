@@ -58,7 +58,7 @@ def add_args(parser):
     parser.add_argument("--squeezenet_next_fire_stochastic_depth", action="store_true")
     parser.add_argument("--squeezenet_next_fire_shakedrop", action="store_true")
 
-    #parser.add_argument("--squeezenet_final_fc", action="store_true") temporarily removed.  seems bugged
+    parser.add_argument("--squeezenet_final_fc", action="store_true") temporarily removed.  seems bugged
     parser.add_argument("--squeezenet_final_size", type=int, default=8)
     
     parser.add_argument("--squeezenet_next_fire_shake_shake", action= "store_true" )
@@ -518,6 +518,7 @@ class SqueezeNet(serialmodule.SerializableModule):
         logging.info("counted " +str(num_pool_so_far)+" pooling layers" )
         layer_dict["dropout"]=nn.Dropout(p=config.dropout_rate)
         self.final_fc=config.final_fc
+        assert( not self.final_fc) #temp bugged
         if not self.final_fc:
             if config.mode != "normal":
                 layer_dict["final_convrelu"]=nn.LeakyReLU()
