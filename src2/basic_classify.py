@@ -315,7 +315,7 @@ def run(args, ensemble_test=False):
             if args.born_again_enable:
                 previous_incarnation_scores= previous_incarnation_context.model(batch_in,pad_mat) if previous_incarnation_context.data_type == DataType.SEQUENCE else previous_incarnation_context.model(batch_in)
                 #smooth scores
-                previous_incarnation_scores=0.5*previous_incarnation_scores +0.5*torch.mean(previous_incarnation_scores)
+                #previous_incarnation_scores=0.5*previous_incarnation_scores +0.5*torch.mean(previous_incarnation_scores)
 
 
             #move categories to same device as scores
@@ -325,7 +325,7 @@ def run(args, ensemble_test=False):
                 loss=  F.cross_entropy(scores,categories) 
                 if args.born_again_enable:
                     previous_incarnation_probs= F.softmax(previous_incarnation_scores,dim=1)
-                    previous_incarnation_divergence=F.kl_div(F.log_softmax(scores,dim=1), previous_incarnation_scores )
+                    previous_incarnation_divergence=F.kl_div(F.log_softmax(scores,dim=1), previous_incarnation_probs )
                     loss+=previous_incarnation_divergence
             elif args.classification_loss_type == "nll":
                 assert not args.born_again_enable
