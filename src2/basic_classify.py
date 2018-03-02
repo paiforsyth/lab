@@ -251,8 +251,8 @@ def run(args, ensemble_test=False):
        for context, arg_instance in zip(contexts,args):
             logging.info("loading saved model from file: "+arg_instance.res_file)
             context.unstash_model()
+            import pdb; pdb.set_trace()
             context.model.load(os.path.join(arg_instance.model_save_path, arg_instance.res_file))
-            import pbd; pdb.set_trace()
             context.stash_model()
        datatools.basic_classification.make_ensemble_prediction_report(contexts, contexts[0].test_loader, args[0].test_report_filename)
        return
