@@ -314,6 +314,8 @@ def run(args, ensemble_test=False):
             
             if args.born_again_enable:
                 previous_incarnation_scores= previous_incarnation_context.model(batch_in,pad_mat) if previous_incarnation_context.data_type == DataType.SEQUENCE else previous_incarnation_context.model(batch_in)
+                #smooth scores
+                previous_incarnation_scores=0.5*previous_incarnation_scores +0.5*torch.mean(previous_incarnation_scores)
 
 
             #move categories to same device as scores
