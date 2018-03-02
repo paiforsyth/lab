@@ -259,7 +259,12 @@ def run(args, ensemble_test=False):
    if args.resume_mode == "standard":
        logging.info("loading saved model from file: "+args.res_file)
        context.model.load(os.path.join(args.model_save_path, args.res_file))
-   
+   if args.born_again_enable == "true":
+       logging.info("loading previous incarnation from file: "+str(args.born_again_model_file))
+       previous_incarnation_context=make_context(args)
+       previous_incarnation_context.model.load(os.path.join(args.born_again_model_file))
+       for param in previous_incarnation_context.model.parameters():
+            param.requires_grad = False
    if args.mode == "test":
         datatools.basic_classification.make_prediction_report(context, context.test_loader,args.test_report_filename ) 
         return
@@ -300,7 +305,9 @@ def run(args, ensemble_test=False):
             #For sequence-to-squence batch in will have dimension batchsize by the max sequence length in the batch. scores  will have dimension batchsize by max sqeunce_length by categoreis
 
             scores= context.model(batch_in,pad_mat) if context.data_type == DataType.SEQUENCE else context.model(batch_in)  #should have dimension batchsize
-
+            
+            if args.born_again_enable:
+                previous_incarnation_scores= previous_incarnation_context.model(batch_in,pad_mat) if previous_incarnation_context.data_type == DataType.SEQUENCE else context.model(batch_in)
 
 
             #move categories to same device as scores
@@ -308,7 +315,12 @@ def run(args, ensemble_test=False):
                 categories=categories.cuda(scores.get_device())
             if args.classification_loss_type == "cross_entropy":
                 loss=  F.cross_entropy(scores,categories) 
+                if args.born_again_enable:
+                    previous_incarnation_probs= F.softmax(previous_incarnation_scores)
+                    previous_incarnation_divergence=F.KLDivLos(F.log_softmax(scores), previous_incarnation_scores )
+                    loss+=previous_incarnation_divergence
             elif args.classification_loss_type == "nll":
+                assert not args.born_again_enable
                 loss= F.nll_loss(scores,categories)
             loss.backward()
 
@@ -369,6 +381,10 @@ def run(args, ensemble_test=False):
                         logging.info("Multiplying anneal duration by "+str(args.epoch_anneal_mult_factor))
                         context.scheduler.Tmax*=args.epoch_anneal_mult_factor 
                         logging.info("anneal duration currently:"+str(context.scheduler.Tmax))
+                    if args.epoch_anneal_update_previous_incarnation:
+                        assert(args.epoch_anneal_save_last)
+                        logging.info("loading previous incarnation")
+                        previous_incarnation_context.model.load(os.path.join(args.model_save_path,timestamp+args.save_prefix +"_endofcycle_checkpoint_" +str(epoch_anneal_cur_cycle) ) )
 
                     
             else:

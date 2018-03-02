@@ -58,6 +58,7 @@ def default_parser(parser=None):
     parser.add_argument("--epoch_anneal_numcycles", type=int, default=6)
     parser.add_argument("--epoch_anneal_mult_factor",type=int, default=1)
     parser.add_argument("--epoch_anneal_init_period",type=int, default=-1) #setting this will override numcycles
+    parser.add_argument("--epoch_anneal_update_previous_incarnation",action="store_true") 
 
 
     parser.add_argument("--grad_norm_clip",type=float, default=None)
@@ -67,6 +68,9 @@ def default_parser(parser=None):
     parser.add_argument("--ensemble_autogen_args", action="store_true")# for the autogen case  
     parser.add_argument("--ensemble_models_files", type=str, nargs="+")
     parser.add_argument("--epoch_anneal_save_last", action="store_true")
+
+    parser.add_argument("--born_again_enable", action="store_true")
+    parser.add_argument("--born_again_model_file", type=str)
 
 
     return parser
