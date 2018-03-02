@@ -111,6 +111,10 @@ def main():
                 args_list.append(cur_args)
       else:
         args_list=get_args_from_files(args.ensemble_args_files)
+        if args.ensemble_models_files is not None:
+             for i,filename in enumerate(args.ensemble_models_files):
+                args_list[i].res_file=filename
+
       basic_classify.run(args_list, ensemble_test=True)
       return
 
