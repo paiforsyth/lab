@@ -31,6 +31,8 @@ import monitoring.reporting
 import monitoring.tb_log
 import genutil.modules
 import genutil.optimutil
+import __main__ as mainfuncs
+
 from torchvision import transforms
 import torchvision.datasets as tvds
 def add_args(parser):
@@ -260,8 +262,12 @@ def run(args, ensemble_test=False):
        logging.info("loading saved model from file: "+args.res_file)
        context.model.load(os.path.join(args.model_save_path, args.res_file))
    if args.born_again_enable:
+       if args.born_again_args_file is not None:
+            logging.info("loading born again args from "+args.born_again_args_file)
+            previous_incarnation_context=make_context( mainfuncs.get_args_from_files([args.born_again_args_file]) [0])
+       else:
+            previous_incarnation_context=make_context(args)
        logging.info("loading previous incarnation from file: "+str(args.born_again_model_file))
-       previous_incarnation_context=make_context(args)
        previous_incarnation_context.model.load(os.path.join(args.born_again_model_file))
        for param in previous_incarnation_context.model.parameters():
             param.requires_grad = False
