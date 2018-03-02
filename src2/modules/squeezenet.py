@@ -245,7 +245,7 @@ class FireSkipMode(Enum):
     PAD=2
 
 class ExcitationFire(serialmodule.SerializableModule):
-    def __init__(self,fire_to_wrap, in_channels, out_channels, r, skip, skipmode, shake_shake=False ):
+    def __init__(self,fire_to_wrap, in_channels, out_channels, r, skip, skipmode, fire_to_wrap2=None, shake_shake=False,shake_shake_mode= shake_shake.ShakeMode.IMAGE):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -258,10 +258,12 @@ class ExcitationFire(serialmodule.SerializableModule):
         if skip:
             logging.info("Creating ExcitationFire with skip layer")
         if shake_shake:
-            logging.info("Creating excitationfire with shake0shake")
-            self.compress2=copy.deepcopy(self.compress)
-            self.wrapped2=copy.deepcopy(self.wrapped)
-            self.expand2=copy.deepcopy(self.expand)
+            assert fire_to_wrap2 is not None
+            logging.info("Creating excitationfire with shake shake")
+            self.shake_shake_mode=shake_shake_mode
+            self.compress2=nn.Linear(in_channels, compressed_dim  )
+            self.wrapped2=fire_to_wrap2
+            self.expand2=nn.Linear(compressed_dim, out_channels)
             init_p(self)
         self.skipmode = skipmode
     def forward(self, x):
@@ -274,6 +276,23 @@ class ExcitationFire(serialmodule.SerializableModule):
         z=torch.unsqueeze(z,2)
         z=torch.unsqueeze(z,3)
         result=z*self.wrapped(x)
+
+        if shake_shake:
+            z2=torch.mean(x,3)
+            z2=torch.mean(z2,2)
+            z2=self.compress2(z2)
+            z2=F.leaky_relu(z2)
+            z2=self.expand2(z2)
+            z2=F.sigmoid(z2)
+            z2=torch.unsqueeze(z2,2)
+            z2=torch.unsqueeze(z2,3)
+            result2=z2*self.wrapped2(x)
+            alpha, beta= shake_shake.generate_alpha_beta(x,self.shake_shake_mode, self.training)
+            result=shake_shake.ShakeFunc.apply(result,result2,alpha,beta) 
+
+
+            result=result
+
         if self.skip:
             if self.skipmode == FireSkipMode.SIMPLE:
                 result=result+x
@@ -486,13 +505,20 @@ class SqueezeNet(serialmodule.SerializableModule):
                     name = "next_fire{}".format(i+2)
                     survival_prob = 1-0.5*i/num_fires 
                     to_add = NextFire(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand=e, skip=skip_here, groups=config.next_fire_groups, skipmode=config.skipmode, final_bn=config.next_fire_final_bn, stochastic_depth=config.next_fire_stochastic_depth, survival_prob = survival_prob, shakedrop=config.next_fire_shakedrop, shake_shake= config.next_fire_shake_shake )
+                    if config.excitation_shake_shake:
+                        to_add2= NextFire(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand=e, skip=skip_here, groups=config.next_fire_groups, skipmode=config.skipmode, final_bn=config.next_fire_final_bn, stochastic_depth=config.next_fire_stochastic_depth, survival_prob = survival_prob, shakedrop=config.next_fire_shakedrop, shake_shake= config.next_fire_shake_shake )
+                   
                 else:
                     name="fire{}".format(i+2)
                     to_add=Fire.from_configure(FireConfig(in_channels=self.channel_counts[i], num_squeeze=num_squeeze, num_expand1=num_expand1, num_expand3=num_expand3, skip=skip_here ))
 
                 if config.use_excitation:
                     to_add.skip=False 
-                    to_add=ExcitationFire(to_add, in_channels=self.channel_counts[i], out_channels=e, r=config.excitation_r, skip=skip_here, skipmode=config.skipmode, shake_shake=config.excitation_shake_shake)
+                    if config.excitation_shake_shake:
+                        to_add2.skip=False
+                    else:
+                        to_add2=None
+                    to_add=ExcitationFire(to_add, in_channels=self.channel_counts[i], out_channels=e, r=config.excitation_r, skip=skip_here, skipmode=config.skipmode, shake_shake=config.excitation_shake_shake, fire_to_wrap2=to_add2)
                     name="ExcitationFire{}".format(i+2)
                 layer_dict[name]=to_add
 

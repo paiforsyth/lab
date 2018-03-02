@@ -1,4 +1,5 @@
 import math
+import logging
 class MyAnneal:
     def __init__(self, optimizer, init_lr, Tmax, cur_step=-1):
         self.optimizer=optimizer
@@ -10,6 +11,7 @@ class MyAnneal:
     def step(self):
         self.cur_step+=1
         lr=self.cur_lr()
+        logging.info("Learning rate is now "+str(lr))
         for param_group in self.optimizer.param_groups:
             param_group['lr']=lr
 

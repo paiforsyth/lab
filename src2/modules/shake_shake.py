@@ -16,16 +16,15 @@ class ShakeFunc(Function):
         return alpha*x1 +(1-alpha)*x2
 
     @staticmethod
-    def backward(xtx, grad_output):
+    def backward(ctx, grad_output):
         alpha=ctx.alpha
-        beta=ctx.beta
+        beta=Variable(ctx.beta)
         grad_x1 = grad_x2 = grad_alpha =grad_beta = None
-        
         if ctx.needs_input_grad[0]:
             grad_x1 = beta * grad_output 
         if ctx.needs_input_grad[1]:
             grad_x2 = (1-beta)* grad_output 
-        return grad_x, grad_x2, grad_alpha, grad_beta
+        return grad_x1, grad_x2, grad_alpha, grad_beta
 
     
 def generate_alpha_beta(x, shake_mode, training):
@@ -43,7 +42,8 @@ def generate_alpha_beta(x, shake_mode, training):
                 beta = x.data.new(1).uniform_()
         else:
             alpha = x.data.new(1).fill_(0.5)
-        return alpha, Variable(beta)
+            beta= x.data.new(1).fill(0.5)
+        return alpha, beta
         
 
        

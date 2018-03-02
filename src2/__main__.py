@@ -57,6 +57,7 @@ def default_parser(parser=None):
     parser.add_argument("--multistep_scheduler_milestone2", type=int, default=225)
     parser.add_argument("--epoch_anneal_numcycles", type=int, default=6)
     parser.add_argument("--epoch_anneal_mult_factor",type=int, default=1)
+    parser.add_argument("--epoch_anneal_init_period",type=int, default=-1) #setting this will override numcycles
 
 
     parser.add_argument("--grad_norm_clip",type=float, default=None)

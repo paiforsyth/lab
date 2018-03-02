@@ -214,7 +214,11 @@ def make_context(args):
         milestones=[args.multistep_scheduler_milestone1, args.multistep_scheduler_milestone2]
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=args.lr_gamma )
    elif args.lr_scheduler == "epoch_anneal":
-       scheduler= genutil.optimutil.MyAnneal(optimizer=optimizer, Tmax= args.num_epochs//args.epoch_anneal_numcycles, init_lr=args.init_lr)
+       if args.epoch_anneal_init_period>0:
+           Tmax = args.epoch_anneal_init_period
+       else:
+           Tmax=args.num_epochs//args.epoch_anneal_numcycles
+       scheduler= genutil.optimutil.MyAnneal(optimizer=optimizer, Tmax=Tmax,  init_lr=args.init_lr)
    elif args.lr_scheduler == None:
        scheduler = None
    else: 
