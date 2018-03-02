@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --gres=gpu:1       # Request GPU "generic resources"
+#SBATCH --gres=gpu:lgpu:4       # Request GPU "generic resources"
 #SBATCH --cpus-per-task=6  # Cores proportional to GPUs: 6 on Cedar, 16 on Graham.
 #SBATCH --mem=64000M       # Memory proportional to GPUs: 32000 Cedar, 64000 Graham.
-#SBATCH --time=3-00:00
-#SBATCH --output=%N-%j.out
+#SBATCH --time=0-08:00
+#SBATCH --output=%N-%jbornagainfrompyramid.out
 #module purge
 #module load miniconda3
 source activate pytorch
