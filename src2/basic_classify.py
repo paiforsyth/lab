@@ -237,9 +237,7 @@ def make_context(args):
        val_loader = None
 
 
-   if args.data_par_enable:
-        model=modules.saveable_data_par.SaveableDataPar(model,args.data_par_devices)
-   return Context(model, train_loader, val_loader, optimizer, indexer, category_names=category_names, tb_writer=monitoring.tb_log.TBWriter("{}_"+args.save_prefix), train_size=train_size, data_type=data_type, scheduler=scheduler, test_loader=test_loader, cuda=args.cuda, holdout_loader= holdout_loader)
+    return Context(model, train_loader, val_loader, optimizer, indexer, category_names=category_names, tb_writer=monitoring.tb_log.TBWriter("{}_"+args.save_prefix), train_size=train_size, data_type=data_type, scheduler=scheduler, test_loader=test_loader, cuda=args.cuda, holdout_loader= holdout_loader)
 
 
 
@@ -265,7 +263,6 @@ def run(args, ensemble_test=False):
 
    if args.resume_mode == "standard":
        logging.info("loading saved model from file: "+args.res_file)
-       import pdb; pdb.set_trace()
        context.model.load(os.path.join(args.model_save_path, args.res_file))
    if args.born_again_enable:
        if args.born_again_args_file is not None:
@@ -280,7 +277,9 @@ def run(args, ensemble_test=False):
    if args.mode == "test":
         datatools.basic_classification.make_prediction_report(context, context.test_loader,args.test_report_filename ) 
         return
-
+    if args.data_par_enable:
+        context.model=modules.saveable_data_par.SaveableDataPar(context.model,args.data_par_devices)
+  
 
    if args.lr_scheduler == "epoch_anneal":
         epoch_anneal_cur_cycle=0
