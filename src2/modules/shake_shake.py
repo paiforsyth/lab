@@ -42,7 +42,7 @@ def generate_alpha_beta(x, shake_mode, training):
                 beta = x.data.new(1).uniform_()
         else:
             alpha = x.data.new(1).fill_(0.5)
-            beta= x.data.new(1).fill(0.5)
+            beta= x.data.new(1).fill_(0.5)
         return alpha, beta
         
 
