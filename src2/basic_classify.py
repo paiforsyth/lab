@@ -382,7 +382,7 @@ def run(args, ensemble_test=False):
                         context.scheduler.Tmax*=args.epoch_anneal_mult_factor 
                         logging.info("anneal duration currently:"+str(context.scheduler.Tmax))
                     if args.epoch_anneal_update_previous_incarnation:
-                        if args.epoch_anneal_start_ba_after_epoch and epoch_count == 0:
+                        if args.epoch_anneal_start_ba_after_epoch and epoch_anneal_cur_cycle == 1:
                             args.born_again_enable=True
                             previous_incarnation_context=make_context(args)
 
