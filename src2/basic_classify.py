@@ -182,7 +182,7 @@ def make_context(args):
    else:
        raise Exception("Unknown model")
 
-   if args.cuda:
+   if args.cuda and not args.data_par_enable:
        model=model.cuda()
    if args.coupled_ensemble =="on":
         assert args.classification_loss_type == "nll"
