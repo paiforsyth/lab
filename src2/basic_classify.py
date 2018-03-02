@@ -259,7 +259,7 @@ def run(args, ensemble_test=False):
    if args.resume_mode == "standard":
        logging.info("loading saved model from file: "+args.res_file)
        context.model.load(os.path.join(args.model_save_path, args.res_file))
-   if args.born_again_enable == "true":
+   if args.born_again_enable:
        logging.info("loading previous incarnation from file: "+str(args.born_again_model_file))
        previous_incarnation_context=make_context(args)
        previous_incarnation_context.model.load(os.path.join(args.born_again_model_file))
@@ -307,7 +307,7 @@ def run(args, ensemble_test=False):
             scores= context.model(batch_in,pad_mat) if context.data_type == DataType.SEQUENCE else context.model(batch_in)  #should have dimension batchsize
             
             if args.born_again_enable:
-                previous_incarnation_scores= previous_incarnation_context.model(batch_in,pad_mat) if previous_incarnation_context.data_type == DataType.SEQUENCE else context.model(batch_in)
+                previous_incarnation_scores= previous_incarnation_context.model(batch_in,pad_mat) if previous_incarnation_context.data_type == DataType.SEQUENCE else previous_incarnation_context.model(batch_in)
 
 
             #move categories to same device as scores
@@ -317,7 +317,7 @@ def run(args, ensemble_test=False):
                 loss=  F.cross_entropy(scores,categories) 
                 if args.born_again_enable:
                     previous_incarnation_probs= F.softmax(previous_incarnation_scores)
-                    previous_incarnation_divergence=F.KLDivLos(F.log_softmax(scores), previous_incarnation_scores )
+                    previous_incarnation_divergence=F.kl_div(F.log_softmax(scores), previous_incarnation_scores )
                     loss+=previous_incarnation_divergence
             elif args.classification_loss_type == "nll":
                 assert not args.born_again_enable
@@ -382,10 +382,16 @@ def run(args, ensemble_test=False):
                         context.scheduler.Tmax*=args.epoch_anneal_mult_factor 
                         logging.info("anneal duration currently:"+str(context.scheduler.Tmax))
                     if args.epoch_anneal_update_previous_incarnation:
+                        if args.epoch_anneal_start_ba_after_epoch and epoch_count == 0:
+                            args.born_again_enable=True
+                            previous_incarnation_context=make_context(args)
+
                         assert(args.epoch_anneal_save_last)
                         logging.info("loading previous incarnation")
                         previous_incarnation_context.model.load(os.path.join(args.model_save_path,timestamp+args.save_prefix +"_endofcycle_checkpoint_" +str(epoch_anneal_cur_cycle) ) )
-
+                        for param in previous_incarnation_context.model.parameters():
+                            param.requires_grad = False
+   
                     
             else:
                 raise Exception("Unknown Scheduler")
