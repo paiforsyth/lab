@@ -279,6 +279,7 @@ def run(args, ensemble_test=False):
         return
    if args.data_par_enable:
         context.model=modules.saveable_data_par.SaveableDataPar(context.model,args.data_par_devices)
+        context.model.cuda()
   
 
    if args.lr_scheduler == "epoch_anneal":
