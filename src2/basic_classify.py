@@ -32,6 +32,7 @@ import monitoring.tb_log
 import genutil.modules
 import genutil.optimutil
 import __main__ as mainfuncs
+import modules.saveable_data_par 
 
 from torchvision import transforms
 import torchvision.datasets as tvds
@@ -234,6 +235,10 @@ def make_context(args):
        train_size= None
        train_loader = None
        val_loader = None
+
+
+   if args.data_par_enable:
+        model=modules.saveable_data_par.SaveableDataPar(model,args.data_par_devices)
    return Context(model, train_loader, val_loader, optimizer, indexer, category_names=category_names, tb_writer=monitoring.tb_log.TBWriter("{}_"+args.save_prefix), train_size=train_size, data_type=data_type, scheduler=scheduler, test_loader=test_loader, cuda=args.cuda, holdout_loader= holdout_loader)
 
 

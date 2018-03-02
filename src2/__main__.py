@@ -79,6 +79,10 @@ def default_parser(parser=None):
     parser.add_argument("--born_again_args_file",type=str, default=None)
 
     parser.add_argument("--save_every_epoch", action="store_true")
+
+    
+    parser.add_argument("--data_par_enable", action="store_true")
+    parser.add_argument("--data_par_devices", type=int, nargs="+")
     
 
     return parser
