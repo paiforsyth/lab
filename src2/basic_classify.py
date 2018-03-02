@@ -277,7 +277,7 @@ def run(args, ensemble_test=False):
    if args.mode == "test":
         datatools.basic_classification.make_prediction_report(context, context.test_loader,args.test_report_filename ) 
         return
-    if args.data_par_enable:
+   if args.data_par_enable:
         context.model=modules.saveable_data_par.SaveableDataPar(context.model,args.data_par_devices)
   
 
