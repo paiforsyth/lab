@@ -16,6 +16,7 @@ import genutil.modules
 import genutil.arguments
 #general rule: all used modules should be able to created just by passing args
 #todo: 
+#implement an ensembling system that saved paramters and models in acompressed file together.  Better for organization
 #thought: could we fit segmentation and sequence-to-sequence in the paradigmn of classification?  To do so we would need to allow more than none "class" per data item.  This would be the world of the output sentence for sequence-to-sequence and the pixel classes for segmentation
 
 def initial_parser(parser = None):
