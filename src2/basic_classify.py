@@ -316,8 +316,8 @@ def run(args, ensemble_test=False):
             if args.classification_loss_type == "cross_entropy":
                 loss=  F.cross_entropy(scores,categories) 
                 if args.born_again_enable:
-                    previous_incarnation_probs= F.softmax(previous_incarnation_scores)
-                    previous_incarnation_divergence=F.kl_div(F.log_softmax(scores), previous_incarnation_scores )
+                    previous_incarnation_probs= F.softmax(previous_incarnation_scores,dim=1)
+                    previous_incarnation_divergence=F.kl_div(F.log_softmax(scores,dim=1), previous_incarnation_scores )
                     loss+=previous_incarnation_divergence
             elif args.classification_loss_type == "nll":
                 assert not args.born_again_enable
