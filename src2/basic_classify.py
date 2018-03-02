@@ -368,6 +368,7 @@ def run(args, ensemble_test=False):
                     if args.epoch_anneal_mult_factor != 1:
                         logging.info("Multiplying anneal duration by "+str(args.epoch_anneal_mult_factor))
                         context.scheduler.Tmax*=args.epoch_anneal_mult_factor 
+                        logging.info("anneal duration currently:"+str(context.scheduler.Tmax))
 
                     
             else:
