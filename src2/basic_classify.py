@@ -376,13 +376,12 @@ def run(args, ensemble_test=False):
                     best_eval_score= -float("inf")
                     if args.epoch_anneal_save_last:
                         context.model.save(os.path.join(args.model_save_path,timestamp+args.save_prefix +"_endofcycle_checkpoint_" +str(epoch_anneal_cur_cycle) )  )
-                    epoch_anneal_cur_cycle+=1
                     if args.epoch_anneal_mult_factor != 1:
                         logging.info("Multiplying anneal duration by "+str(args.epoch_anneal_mult_factor))
                         context.scheduler.Tmax*=args.epoch_anneal_mult_factor 
                         logging.info("anneal duration currently:"+str(context.scheduler.Tmax))
                     if args.epoch_anneal_update_previous_incarnation:
-                        if args.epoch_anneal_start_ba_after_epoch and epoch_anneal_cur_cycle == 1:
+                        if args.epoch_anneal_start_ba_after_epoch and epoch_anneal_cur_cycle == 0:
                             args.born_again_enable=True
                             previous_incarnation_context=make_context(args)
 
@@ -392,6 +391,7 @@ def run(args, ensemble_test=False):
                         for param in previous_incarnation_context.model.parameters():
                             param.requires_grad = False
    
+                    epoch_anneal_cur_cycle+=1
                     
             else:
                 raise Exception("Unknown Scheduler")
