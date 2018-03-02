@@ -95,7 +95,6 @@ def make_context(args):
    if args.dataset_for_classification == "simple":
         if args.save_prefix is None:
             args.save_prefix="simplification_classification"
-        logging.info("using save prefix "+str(args.save_prefix))
         if args.ds_path is None:
             args.ds_path= "../data/sentence-aligned.v2" 
         train_dataset, val_dataset, index2vec, indexer = datatools.set_simp.load(args)
@@ -150,6 +149,7 @@ def make_context(args):
    
 
 
+   logging.info("using save prefix "+str(args.save_prefix))
 
 
    if data_type == DataType.SEQUENCE:
@@ -361,6 +361,9 @@ def run(args, ensemble_test=False):
                     if args.epoch_anneal_save_last:
                         context.model.save(os.path.join(args.model_save_path,timestamp+args.save_prefix +"_endofcycle_checkpoint_" +str(epoch_anneal_cur_cycle) )  )
                     epoch_anneal_cur_cycle+=1
+                    if args.epoch_anneal_mult_factor != 1:
+                        logging.info("Multiplying anneal duration by "+str(args.epoch_anneal_mult_factor))
+                        context.scheduler.Tmax*=args.epoch_anneal_mult_factor 
 
                     
             else:
