@@ -390,6 +390,9 @@ def run(args, ensemble_test=False):
                         previous_incarnation_context.model.load(os.path.join(args.model_save_path,timestamp+args.save_prefix +"_endofcycle_checkpoint_" +str(epoch_anneal_cur_cycle) ) )
                         for param in previous_incarnation_context.model.parameters():
                             param.requires_grad = False
+                        if args.epoch_anneal_reinit_after_cycle:
+                            logging.info("resenting parameters of current model")
+                            context.model.init_params()
    
                     epoch_anneal_cur_cycle+=1
                     

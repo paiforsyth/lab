@@ -60,6 +60,8 @@ def default_parser(parser=None):
     parser.add_argument("--epoch_anneal_init_period",type=int, default=-1) #setting this will override numcycles
     parser.add_argument("--epoch_anneal_update_previous_incarnation",action="store_true") 
     parser.add_argument("--epoch_anneal_start_ba_after_epoch",action="store_true") 
+    parser.add_argument("--epoch_anneal_reinit_after_cycle",action="store_true") 
+
 
 
 
