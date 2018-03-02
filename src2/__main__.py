@@ -76,6 +76,8 @@ def default_parser(parser=None):
     parser.add_argument("--born_again_enable", action="store_true")
     parser.add_argument("--born_again_model_file", type=str)
     parser.add_argument("--born_again_args_file",type=str, default=None)
+
+    parser.add_argument("--save_every_epoch", action="store_true")
     
 
     return parser

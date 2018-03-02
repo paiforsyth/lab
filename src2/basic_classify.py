@@ -356,6 +356,11 @@ def run(args, ensemble_test=False):
         context.tb_writer.write_accuracy(eval_score)
         logging.info("Finished epoch number "+ str(epoch_count+1) +  " of " +str(args.num_epochs)+".  Accuracy is "+ str(eval_score) +".")
 
+        if args.save_every_epoch:
+            context.model.save(os.path.join(args.model_save_path,timestamp+args.save_prefix +"_most_recent" )  )
+            logging.info("saving most recent model")
+
+
         if eval_score > best_eval_score:
             best_eval_score=eval_score
             logging.info("Saving model")
@@ -381,6 +386,7 @@ def run(args, ensemble_test=False):
                 if context.scheduler.cur_step == context.scheduler.Tmax:
                     logging.info("Hit  min learning rate.  Restarting learning rate annealing.")
                     context.scheduler.cur_step = -1
+                    context.scheduler.step()
                     best_eval_score= -float("inf")
                     if args.epoch_anneal_save_last:
                         context.model.save(os.path.join(args.model_save_path,timestamp+args.save_prefix +"_endofcycle_checkpoint_" +str(epoch_anneal_cur_cycle) )  )
