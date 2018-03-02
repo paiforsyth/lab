@@ -392,7 +392,7 @@ def run(args, ensemble_test=False):
                             param.requires_grad = False
                         if args.epoch_anneal_reinit_after_cycle:
                             logging.info("resenting parameters of current model")
-                            import pdb; pdb.set_trace
+                            import pdb; pdb.set_trace()
                             context.model.init_params()
    
                     epoch_anneal_cur_cycle+=1
