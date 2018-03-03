@@ -91,7 +91,7 @@ def optimize_ensemble_on_val(contexts,val_loader):
    def eval_linear_model(model):
        combined_scores=model(score_variable).squeeze(2)
        _,predictions=torch.max(combined_scores, dim=1)
-       acc= sum(predictions.cpu() == categories.cpu() )/len(categories)
+       acc= sum(predictions.cpu() == category_variable.cpu() )/len(categories)
        return acc.data[0]
    logging.info("Equal-weight validation accuracy= "+str(eval_linear_model(meta_model)))
    optimizer=torch.optim.Adam(meta_model.parameters(),lr=0.01)
