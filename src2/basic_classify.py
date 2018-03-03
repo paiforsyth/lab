@@ -259,7 +259,7 @@ def run(args, ensemble_test=False):
             context.model.load(os.path.join(arg_instance.model_save_path, arg_instance.res_file))
             context.stash_model()
        if args[0].weight_ensemble_on_validation_set:
-           meta_model = datatools.basic_classification.omptimize_ensemble_on_val(contexts, contexts[0].val_loader)
+           meta_model = datatools.basic_classification.optimize_ensemble_on_val(contexts, contexts[0].val_loader)
        else:
             meta_model = None
        datatools.basic_classification.make_ensemble_prediction_report(contexts, contexts[0].test_loader, args[0].test_report_filename, meta_model=meta_model)
