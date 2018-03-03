@@ -72,7 +72,6 @@ def optimize_ensemble_on_val(contexts,val_loader):
    category_list=[]
    for batch, *other in val_loader:
             categories = other[0]
-            import pdb; pdb.set_trace()
             category_list.append(categories.data)
    category_tensor=torch.cat(category_list, dim=0)#dimension datasetsize
     
@@ -100,7 +99,7 @@ def optimize_ensemble_on_val(contexts,val_loader):
    logging.info("optimally combining predictors")
    for i in tqdm(range(NUM_ITER)):
        y = meta_model(score_variable).squeeze(2)#should have dimension datapoints by categories
-       meta_loss = F.cross_entropy(category_variable,y)
+       meta_loss = F.cross_entropy(y,category_variable)
        optimizer.zero_grad()
        meta_loss.backward()
        optimizer.step()
