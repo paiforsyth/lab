@@ -115,6 +115,8 @@ def ensemble_predict(contexts, loader, meta_model=None):
     -meta_model is a nn.Linear for combining scores of different modelss
     
    '''
+   if meta_model is not None:
+       logging.info("using provided meta_model")
    overall_predictions=[]
    logging.info("Predicting.")
    score_list_2d=[]
