@@ -70,6 +70,7 @@ def optimize_ensemble_on_val(contexts,val_loader):
        context.stash_model()
 
    category_list=[]
+   import pdb; pdb.set_trace()
    for batch, *other in enumerate(val_loader):
             categories = other[0]
             category_list.append(torch.Tensor(categories))
