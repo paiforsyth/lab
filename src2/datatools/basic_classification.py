@@ -53,12 +53,12 @@ def optimize_ensemble_on_val(contexts,val_loader):
    logging.info("Predicting val.")
    score_list_2d=[]
    num_models= len(contexts)
-   for i in range(len(loader)):
+   for i in range(len(val_loader)):
         score_list_2d.append([])
    for context in contexts:
        context.unstash_model()
        context.model.eval()
-       for i, (batch, *other) in tqdm(enumerate(loader)):
+       for i, (batch, *other) in tqdm(enumerate(val_loader)):
             if context.data_type==DataType.SEQUENCE:
                 pad_mat = other[1]
 
@@ -70,13 +70,13 @@ def optimize_ensemble_on_val(contexts,val_loader):
        context.stash_model()
 
    category_list=[]
-   for batch, *other in enumerate(loader):
+   for batch, *other in enumerate(val_loader):
             categories = other[0]
             category_list.append(categories)
    category_tensor=torch.cat(category_list, dim=0)#dimension datasetsize
     
    batch_scores=[]
-   for i in range(len(loader)):
+   for i in range(len(val_loader)):
         batch_scores.append(torch.cat(score_list_2d[i],dim=2))# result of this cat operation has dimension batchsize by num categories by num models
    score_tensor=torch.cat(batch_scores, dim=0) #has dimensions number of datapoints by num catergories by num models
    meta_model=nn.Linear(num_models, 1)    
