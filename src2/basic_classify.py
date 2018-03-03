@@ -119,18 +119,18 @@ def make_context(args):
         test_dataset=val_dataset #for testing
    elif args.dataset_for_classification == "cifar_challenge":
         data_type = DataType.IMAGE
-         f=open("../data/cifar/train_data","rb")
-         squashed_images=pickle.load(f)
-         labels=pickle.load(f)
-         f.close()
-         train_dataset,val_dataset = datatools.set_cifar_challenge.make_train_val_datasets(squashed_images, labels, args.validation_set_size, transform=None, shuf=args.cifar_shuffle_val_set) 
-         tr = transforms.Compose([transforms.RandomCrop(size=32 ,padding= 4), transforms.RandomHorizontalFlip(), transforms.ToTensor() ])
-         if args.cifar_random_erase:
+        f=open("../data/cifar/train_data","rb")
+        squashed_images=pickle.load(f)
+        labels=pickle.load(f)
+        f.close()
+        train_dataset,val_dataset = datatools.set_cifar_challenge.make_train_val_datasets(squashed_images, labels, args.validation_set_size, transform=None, shuf=args.cifar_shuffle_val_set) 
+        tr = transforms.Compose([transforms.RandomCrop(size=32 ,padding= 4), transforms.RandomHorizontalFlip(), transforms.ToTensor() ])
+        if args.cifar_random_erase:
                 tr=transforms.Compose([tr, datatools.img_tools.RandomErase()])
-         if args.holdout:
+        if args.holdout:
                 holdout_dataset, val_dataset = val_dataset.split(args.holdout_size)
-         train_dataset.transform = tr
-         val_dataset.transform = transforms.ToTensor()
+        train_dataset.transform = tr
+        val_dataset.transform = transforms.ToTensor()
        
         if args.mode == "train":
             pass
