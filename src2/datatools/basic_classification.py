@@ -142,7 +142,10 @@ def ensemble_predict(contexts, loader, meta_model=None):
        if meta_model is None:
            batch_mean_scores.append(torch.mean(torch.cat(score_list_2d[i],dim=2),dim=2 ))
        else: 
-           batch_mean_scores.append(meta_model( torch.cat(score_list_2d[i],dim=2)).squeeze(2)  )
+           curscores= Variable(torch.cat(score_list_2d[i],dim=2))
+           if torch.cuda.is_available():
+                curscores=curscores.cuda()
+           batch_mean_scores.append(meta_model( curscores ).squeeze(2).data  )
    batch_mean_score_tensor=torch.cat(batch_mean_scores, dim=0)
    _,predictions=torch.max(batch_mean_score_tensor,dim=1)
    return predictions.tolist() 
