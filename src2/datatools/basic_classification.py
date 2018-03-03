@@ -72,7 +72,7 @@ def optimize_ensemble_on_val(contexts,val_loader):
    category_list=[]
    for batch, *other in enumerate(val_loader):
             categories = other[0]
-            category_list.append(categories)
+            category_list.append(torch.Tensor(categories))
    category_tensor=torch.cat(category_list, dim=0)#dimension datasetsize
     
    batch_scores=[]
