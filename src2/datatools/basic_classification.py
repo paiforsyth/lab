@@ -90,7 +90,7 @@ def optimize_ensemble_on_val(contexts,val_loader):
 
    def eval_linear_model(model):
        combined_scores=model(score_variable).squeeze(2)
-       _,predictions=torch.max(combined_scores)
+       _,predictions=torch.max(combined_scores, dim=1)
        acc= sum(predictions.cpu() == categories.cpu() )/len(categories)
        return acc.data[0]
    logging.info("Equal-weight validation accuracy= "+str(eval_linear_model(meta_model)))
@@ -101,7 +101,7 @@ def optimize_ensemble_on_val(contexts,val_loader):
        y = meta_model(score_variable).squeeze(2)#should have dimension datapoints by categories
        meta_loss = nn.cross_entropy(category_variable,y)
        optimizer.zero_grad()
-       loss.backwards()
+       meta_loss.backwards()
        optimizer.step()
    logging.info("Optimized validation accuracy= "+str(eval_linear_model(meta_model)))
    return meta_model
