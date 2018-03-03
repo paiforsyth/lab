@@ -37,6 +37,7 @@ def default_parser(parser=None):
     parser.add_argument("--resume_mode", type=str, choices=["none", "standard", "ensemble"], default= "none" )
     parser.add_argument("--res_file",type=str, default="recent_model") 
     parser.add_argument("--mode", type=str, choices=["test", "train"], default="train")
+
     parser.add_argument("--test_report_filename", type=str)
     parser.add_argument("--use_saved_processed_data", action="store_true")
     parser.add_argument("--processed_data_path",type=str,default="../saved_processed_data")
@@ -73,6 +74,7 @@ def default_parser(parser=None):
     parser.add_argument("--ensemble_autogen_args", action="store_true")# for the autogen case  
     parser.add_argument("--ensemble_models_files", type=str, nargs="+")
     parser.add_argument("--epoch_anneal_save_last", action="store_true")
+    parser.add_argument("--weight_ensemble_on_validation_set", action="store_true")
 
     parser.add_argument("--born_again_enable", action="store_true")
     parser.add_argument("--born_again_model_file", type=str)
@@ -119,7 +121,9 @@ def main():
         if args.ensemble_models_files is not None:
              for i,filename in enumerate(args.ensemble_models_files):
                 args_list[i].res_file=filename
-
+      if args.weight_ensemble_on_validation_set:
+          for arg_instance in args_list:
+              arg_instance.weight_ensemble_on_validation_set=True
       basic_classify.run(args_list, ensemble_test=True)
       return
 

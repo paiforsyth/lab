@@ -48,7 +48,7 @@ def predict(context, loader):
    return overall_predictions 
 
 
-def evaluate_ensemble_on_val(contexts,coefficents,val_loader):
+def optimize_ensemble_on_val(contexts,val_loader):
    overall_predictions=[]
    logging.info("Predicting val.")
    score_list_2d=[]
@@ -87,17 +87,32 @@ def evaluate_ensemble_on_val(contexts,coefficents,val_loader):
         meta_model=meta_model.cuda()
         score_variable=score_variable.cuda()
         category_varaible = category_variable.cuda()
+
+   def eval_linear_model(model):
+       combined_scores=model(score_variable).squeeze(2)
+       predictions=_,predictions=torch.max(combined_scores)
+       acc= sum(predictions.cpu() == categories.cpu() )/len(categories)
+       return acc.data[0]
+   logging.info("Equal-weight validation accuracy= "+str(eval_linear_model(meta_model)))
    optimizer=torch.optim.Adam(meta_model.parameters(),lr=0.01)
    NUM_ITER=2000 
-   for i in range(NUM_ITER):
-       y = meta_model(score_variable)
-       #meta_loss = nn.
+   logging.info("optimally combining predictors")
+   for i in tqdm(range(NUM_ITER)):
+       y = meta_model(score_variable).squeeze(2)#should have dimension datapoints by categories
+       meta_loss = nn.cross_entropy(category_variable,y)
+       optimizer.zero_grad()
+       loss.backwards()
+       optimizer.step()
+   logging.info("Optimized validation accuracy= "+str(eval_linear_model(meta_model)))
+   return meta_model
+
     
 
-def ensemble_predict(contexts, loader):
+def ensemble_predict(contexts, loader, meta_model=None):
    '''
    Note: models are expected to be stashed
    args:
+    -meta_model is a nn.Linear for combining scores of different modelss
     
    '''
    overall_predictions=[]
@@ -122,7 +137,10 @@ def ensemble_predict(contexts, loader):
     
    batch_mean_scores=[]
    for i in range(len(loader)):
-        batch_mean_scores.append(torch.mean(torch.cat(score_list_2d[i],dim=2),dim=2 ))
+       if meta_model is None:
+           batch_mean_scores.append(torch.mean(torch.cat(score_list_2d[i],dim=2),dim=2 ))
+       else: 
+           batch_mean_scores.append(meta_model( torch.cat(score_list_2d[i],dim=2)).squeeze(2)  )
    batch_mean_score_tensor=torch.cat(batch_mean_scores, dim=0)
    _,predictions=torch.max(batch_mean_score_tensor,dim=1)
    return predictions.tolist() 
@@ -137,8 +155,8 @@ def make_prediction_report(context, loader, filename):
         f.write(str(index)+","+str(prediction) + "\n")
     f.close()
 
-def make_ensemble_prediction_report(contexts, loader, filename):
-    predictions = ensemble_predict(contexts, loader)
+def make_ensemble_prediction_report(contexts, loader, filename, meta_model=None):
+    predictions = ensemble_predict(contexts, loader, meta_model)
     f=open(filename,"w")
     f.write("ids,labels\n")
     index=0
