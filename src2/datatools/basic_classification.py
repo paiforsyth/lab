@@ -69,11 +69,11 @@ def evaluate_ensemble_on_val(contexts,coefficents,val_loader):
        context.model.train()
        context.stash_model()
 
-    category_list=[]
-    for batch, *other in enumerate(loader):
+   category_list=[]
+   for batch, *other in enumerate(loader):
             categories = other[0]
             category_list.append(categories)
-    category_tensor=torch.cat(category_list, dim=0)#dimension datasetsize
+   category_tensor=torch.cat(category_list, dim=0)#dimension datasetsize
     
    batch_scores=[]
    for i in range(len(loader)):
