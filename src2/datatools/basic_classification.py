@@ -3,6 +3,7 @@ from tqdm import tqdm
 import logging
 import torch.nn.functional as F
 import torch
+import torch.nn as nn
 import torch.utils.data.dataloader
 from torch.autograd import Variable
 class DataType(Enum):
@@ -45,6 +46,53 @@ def predict(context, loader):
         overall_predictions.extend(predictions_this_batch.data.tolist())
    context.model.train()
    return overall_predictions 
+
+
+def evaluate_ensemble_on_val(contexts,coefficents,val_loader):
+   overall_predictions=[]
+   logging.info("Predicting val.")
+   score_list_2d=[]
+   num_models= len(contexts)
+   for i in range(len(loader)):
+        score_list_2d.append([])
+   for context in contexts:
+       context.unstash_model()
+       context.model.eval()
+       for i, (batch, *other) in tqdm(enumerate(loader)):
+            if context.data_type==DataType.SEQUENCE:
+                pad_mat = other[1]
+
+            scores= context.model(batch,pad_mat) if context.data_type == DataType.SEQUENCE else context.model(batch)  #should have dimension batchsize by number of categories
+            scores=F.log_softmax(scores,dim=1)
+            scores=scores.unsqueeze(2)
+            score_list_2d[i].append(scores.data)
+       context.model.train()
+       context.stash_model()
+
+    category_list=[]
+    for batch, *other in enumerate(loader):
+            categories = other[0]
+            category_list.append(categories)
+    category_tensor=torch.cat(category_list, dim=0)#dimension datasetsize
+    
+   batch_scores=[]
+   for i in range(len(loader)):
+        batch_scores.append(torch.cat(score_list_2d[i],dim=2))# result of this cat operation has dimension batchsize by num categories by num models
+   score_tensor=torch.cat(batch_scores, dim=0) #has dimensions number of datapoints by num catergories by num models
+   meta_model=nn.Linear(num_models, 1)    
+   meta_model.weight.data.fill_(1)
+   score_variable=Variable(score_tensor)
+   category_variable=Variable(category_tensor) 
+   if torch.cuda.is_available():
+        meta_model=meta_model.cuda()
+        score_variable=score_variable.cuda()
+        category_varaible = category_variable.cuda()
+   optimizer=torch.optim.Adam(meta_model.parameters(),lr=0.01)
+   NUM_ITER=2000 
+   for i in range(NUM_ITER):
+       y = meta_model(score_variable)
+       #meta_loss = nn.
+    
 
 def ensemble_predict(contexts, loader):
    '''
