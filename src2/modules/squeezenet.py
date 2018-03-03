@@ -601,9 +601,9 @@ class SqueezeNet(serialmodule.SerializableModule):
         return x
 
 
-    def cuda(self):
+    def cuda(self,*params,**params2):
         if not self.chunk_across_devices:
-            return  super().cuda()
+            return  super().cuda(*params,**params2)
             
         for i,layer_chunk in enumerate(self.layer_chunk_list):
             layer_chunk.cuda( self.layer_chunk_devices[i] )
